@@ -1,0 +1,12 @@
+1,Year,sprint_year
+1,Year & Quarter,year_quarter
+1,Year & Month,year_month
+1,Sprint,sprint_abbr
+1,Quarter,sprint_quarter
+1,Month,sprint_month
+2,Level 5,level_5_name
+2,Level 4,level_4_name
+2,Level 3,level_3_name
+2,Level 2,level_2_name
+2,Level 1,level_1_name
+2,Team,team_name
