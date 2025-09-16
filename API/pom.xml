@@ -1,10 +1,20 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project 
+  xmlns="http://maven.apache.org/POM/4.0.0" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+                      http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
   <modelVersion>4.0.0</modelVersion>
+
+  <!-- Let Spring Boot manage all the versioning for core dependencies -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.1.0</version>
+    <relativePath/> <!-- lookup parent from repo -->
+  </parent>
+
   <groupId>com.prism.api</groupId>
   <artifactId>prism-api</artifactId>
   <version>0.0.1-SNAPSHOT</version>
@@ -13,44 +23,49 @@
   <properties>
     <java.version>17</java.version>
     <groovy.version>4.0.14</groovy.version>
-    <spring.boot.version>3.1.0</spring.boot.version>
+    <gmavenplus.version>1.13.1</gmavenplus.version>
   </properties>
 
   <dependencies>
+    <!-- Spring Boot Starters -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
-      <version>${spring.boot.version}</version>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-jpa</artifactId>
-      <version>${spring.boot.version}</version>
     </dependency>
+
+    <!-- Postgres driver -->
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <version>42.6.0</version>
     </dependency>
+
+    <!-- Groovy runtime for your code -->
     <dependency>
       <groupId>org.codehaus.groovy</groupId>
-      <artifactId>groovy</artifactId>
+      <artifactId>groovy-all</artifactId>
       <version>${groovy.version}</version>
     </dependency>
   </dependencies>
 
   <build>
     <plugins>
+
+      <!-- Spring Boot Maven Plugin -->
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
-        <version>${spring.boot.version}</version>
       </plugin>
 
+      <!-- GMavenPlus for Groovy compilation -->
       <plugin>
         <groupId>org.codehaus.gmavenplus</groupId>
         <artifactId>gmavenplus-plugin</artifactId>
-        <version>1.13.1</version>
+        <version>${gmavenplus.version}</version>
         <executions>
           <execution>
             <goals>
@@ -60,6 +75,7 @@
           </execution>
         </executions>
       </plugin>
+
     </plugins>
   </build>
 </project>
