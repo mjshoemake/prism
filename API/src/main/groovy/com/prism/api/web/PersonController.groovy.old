@@ -1,0 +1,25 @@
+﻿package com.prism.api.web
+
+import com.prism.api.domain.Person
+import com.prism.api.service.PersonService
+import org.springframework.web.bind.annotation.*
+
+@RestController
+@RequestMapping(\"/api/people\")
+class PersonController {
+    private final PersonService service
+
+    PersonController(PersonService service) {
+        this.service = service
+    }
+
+    @GetMapping
+    List<Person> getAll() {
+        service.findAll()
+    }
+
+    @GetMapping(\"/{id}\")
+    Person getOne(@PathVariable Long id) {
+        service.findById(id)
+    }
+}

@@ -1,4 +1,4 @@
-package com.prism.api.service
+package com.prism.api.web
 
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
@@ -22,15 +22,21 @@ class DynamicQueryService {
         String valueColumnsForSelectClause,
         String whereClause
     ) {
+        if (valueColumnsForSelectClause) {
+            valueColumnsForSelectClause = ", " + valueColumnsForSelectClause
+        } else {
+            valueColumnsForSelectClause = ""
+        }
         def sql = """
-            SELECT ${focusLevelColumn}, ${valueColumnsForSelectClause}
-              FROM "prism"."Sprint_Metrics_Fact" smf
-              JOIN "prism"."Sprint_Dim" sd  ON smf.sprint_pk = sd.sprint_pk
-              JOIN "prism"."Team_Dim" td    ON smf.team_pk   = td.team_pk
+            SELECT ${focusLevelColumn}${valueColumnsForSelectClause}
+            FROM "prism"."Sprint_Metrics_Fact" smf
+            JOIN "prism"."Sprint_Dim" sd  ON smf.sprint_pk = sd.sprint_pk
+            JOIN "prism"."Team_Dim" td    ON smf.team_pk   = td.team_pk
             ${whereClause}
             GROUP BY ${focusLevelColumn}
             ORDER BY ${focusLevelColumn}
         """
+        println("SQL: $sql")
         jdbcTemplate.queryForList(sql)
     }
 }

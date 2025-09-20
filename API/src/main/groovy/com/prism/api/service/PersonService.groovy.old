@@ -1,0 +1,22 @@
+﻿package com.prism.api.service
+
+import com.prism.api.domain.Person
+import com.prism.api.repository.PersonRepository
+import org.springframework.stereotype.Service
+
+@Service
+class PersonService {
+    private final PersonRepository repo
+
+    PersonService(PersonRepository repo) {
+        this.repo = repo
+    }
+
+    List<Person> findAll() {
+        repo.findAll()
+    }
+
+    Person findById(Long id) {
+        repo.findById(id).orElseThrow { new RuntimeException(\"Person not found\") }
+    }
+}
