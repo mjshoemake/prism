@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metrics Dashboard (Split) - Purple & Black Theme</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="purple-black-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        .split-root { display: flex; min-height: calc(100vh - 64px); }
+        .split-left {
+            width: 340px; min-width: 260px; max-width: 480px;
+            resize: horizontal; overflow: auto; border-right: 1px solid var(--bs-border-color);
+            padding: 1rem; font-size: 0.875rem; /* smaller font */
+        }
+        .split-right { flex: 1; padding: 1rem; }
+        .section-title { margin-bottom: .5rem; font-weight: 600; color: var(--bs-text-light); }
+        .spacer { height: .75rem; }
+        label.form-label { margin-bottom: .25rem; font-weight: 500; }
+    </style>
+    
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#"><i class="fas fa-chart-bar me-2"></i>Metrics Dashboard (Split)</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="metrics.html"><i class="fas fa-columns me-1"></i>Standard Layout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div id="app" class="split-root">
+        <!-- React mounts here -->
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const purpleTheme = {
+            primary: '#6f42c1', primaryDark: '#5a2d9e', primaryLight: '#8b5fd6',
+            accent: '#8e44ad', textLight: '#e6d9f2', textMuted: '#b8a9d9', white: '#ffffff'
+        };
+
+        const DashboardSplit = () => {
+            const [focusAreas, setFocusAreas] = useState([]);
+            const [focusLevels, setFocusLevels] = useState([]);
+            const [selectedFocusArea, setSelectedFocusArea] = useState(null);
+            const [selectedFocusLevel, setSelectedFocusLevel] = useState(null);
+            const [chartData, setChartData] = useState([]);
+            const [filters, setFilters] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [chartError, setChartError] = useState(null);
+            const [snackbar, setSnackbar] = useState(null);
+            const [focusLevelCache, setFocusLevelCache] = useState({}); // { [focus_area_pk]: column_name }
+
+            const chartRef = useRef(null);
+            const chartInstanceRef = useRef(null);
+
+            const showSnackbar = (message, variant = 'info') => {
+                setSnackbar({ message, variant });
+                window.clearTimeout(showSnackbar._t);
+                showSnackbar._t = window.setTimeout(() => setSnackbar(null), 2500);
+            };
+
+            useEffect(() => { fetchFocusAreas(); }, []);
+            useEffect(() => { if (selectedFocusArea) fetchFocusLevels(selectedFocusArea.focus_area_pk); }, [selectedFocusArea]);
+            useEffect(() => { if (selectedFocusLevel) fetchChartData(); }, [selectedFocusLevel, filters]);
+            useEffect(() => { if (chartData.length > 0 && chartRef.current) updateChart(); }, [chartData]);
+
+            const fetchFocusAreas = async () => {
+                try {
+                    setLoading(true);
+                    const res = await fetch('http://localhost:8080/api/metrics/focus-areas-list');
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    const data = await res.json();
+                    setFocusAreas(data);
+                    if (data.length > 0) setSelectedFocusArea(data[0]);
+                } catch (e) {
+                    setError(`Failed to fetch focus areas: ${e.message}`);
+                } finally { setLoading(false); }
+            };
+
+            const fetchFocusLevels = async (focusAreaPk) => {
+                try {
+                    setLoading(true);
+                    const res = await fetch(`http://localhost:8080/api/metrics/focus-levels-list/${focusAreaPk}`);
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    const data = await res.json();
+                    setFocusLevels(data);
+                    if (data.length > 0) {
+                        const cached = focusLevelCache[focusAreaPk];
+                        if (cached) {
+                            const lvl = data.find(l => l.column_name === cached) || data[0];
+                            setSelectedFocusLevel(lvl);
+                        } else {
+                            setSelectedFocusLevel(data[0]);
+                        }
+                    }
+                } catch (e) {
+                    setError(`Failed to fetch focus levels: ${e.message}`);
+                } finally { setLoading(false); }
+            };
+
+            const fetchChartData = async () => {
+                if (!selectedFocusLevel) return;
+                try {
+                    setLoading(true); setChartError(null);
+                    const whereParts = filters.map(f => `${f.column_name} = '${String(f.value).replace(/'/g, "''")}'`);
+                    const whereClause = whereParts.length ? `WHERE ${whereParts.join(' and ')}` : '';
+                    const body = {
+                        focusLevelColumn: selectedFocusLevel.column_name,
+                        valueColumnsForSelectClause: 'ROUND((SUM(smf.committed_story_points_completed)::DECIMAL / SUM(smf.committed_story_points)::DECIMAL) * 100, 2) as "Say/Do Ratio"',
+                        whereClause
+                    };
+                    const res = await fetch('http://localhost:8080/api/metrics/sprint-metrics', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(body)
+                    });
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}, body: ${await res.text()}`);
+                    const data = await res.json();
+                    setChartData(data);
+                } catch (e) {
+                    setChartError(`Failed to fetch chart data: ${e.message}`); setChartData([]);
+                } finally { setLoading(false); }
+            };
+
+            const updateChart = () => {
+                if (chartInstanceRef.current) chartInstanceRef.current.destroy();
+                const labels = chartData.map(it => it[selectedFocusLevel.column_name] || 'Unknown');
+                const values = chartData.map(it => it['Say/Do Ratio'] || 0);
+                const ctx = chartRef.current.getContext('2d');
+                chartInstanceRef.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels, datasets: [{ label: 'Say/Do Ratio (%)', data: values, backgroundColor: purpleTheme.primary, borderColor: purpleTheme.primaryDark, borderWidth: 1 }] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { labels: { color: purpleTheme.white, font: { size: 12 } } },
+                            tooltip: { callbacks: { afterBody: (items) => items?.length ? `Filter on: ${selectedFocusLevel?.name} = ${items[0].label}` : '' } }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, max: 100, ticks: { color: purpleTheme.textMuted, callback: v => v + '%' }, grid: { color: purpleTheme.secondary } },
+                            x: { ticks: { color: purpleTheme.textMuted }, grid: { color: purpleTheme.secondary } }
+                        }
+                    }
+                });
+
+                chartRef.current.onclick = (evt) => {
+                    const pts = chartInstanceRef.current.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+                    if (!pts.length) return;
+                    const idx = pts[0].index;
+                    const label = chartInstanceRef.current.data.labels[idx];
+                    if (!label) return;
+                    setFilters(prev => {
+                        const exists = prev.some(f => f.column_name === selectedFocusLevel.column_name && String(f.value) === String(label));
+                        if (exists) { showSnackbar('Filter already exists', 'warning'); return prev; }
+                        showSnackbar(`Added filter: ${selectedFocusLevel.name} = ${label}`, 'success');
+                        return [...prev, { name: selectedFocusLevel.name, column_name: selectedFocusLevel.column_name, value: label }];
+                    });
+                    // Drill down one level if available
+                    const cur = focusLevels.findIndex(fl => fl.column_name === selectedFocusLevel.column_name);
+                    const next = cur >= 0 && cur + 1 < focusLevels.length ? cur + 1 : -1;
+                    if (next !== -1) {
+                        const nextLevel = focusLevels[next];
+                        setSelectedFocusLevel(nextLevel);
+                        if (selectedFocusArea) {
+                            setFocusLevelCache(prev => ({ ...prev, [selectedFocusArea.focus_area_pk]: nextLevel.column_name }));
+                        }
+                        showSnackbar(`Drilled down to: ${nextLevel.name}`, 'info');
+                    }
+                    else { showSnackbar('No deeper level available', 'warning'); }
+                };
+            };
+
+            const handleFocusAreaChange = (e) => {
+                const pk = parseInt(e.target.value);
+                const sel = focusAreas.find(a => a.focus_area_pk === pk);
+                setSelectedFocusArea(sel);
+                setSelectedFocusLevel(null);
+                setChartData([]);
+            };
+
+            const handleFocusLevelChange = (e) => {
+                const col = e.target.value;
+                const sel = focusLevels.find(l => l.column_name === col);
+                setSelectedFocusLevel(sel);
+                if (selectedFocusArea && sel) {
+                    setFocusLevelCache(prev => ({ ...prev, [selectedFocusArea.focus_area_pk]: sel.column_name }));
+                }
+            };
+
+            return (
+                <div className="w-100 d-flex">
+                    <div className="split-left">
+                        <div>
+                            <div className="section-title">Selections</div>
+                            <div className="mb-3">
+                                <label className="form-label">Focus Area</label>
+                                <select className="form-select form-select-sm" value={selectedFocusArea?.focus_area_pk || ''} onChange={handleFocusAreaChange} disabled={loading}>
+                                    {focusAreas.map(a => <option key={a.focus_area_pk} value={a.focus_area_pk}>{a.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="mb-2">
+                                <label className="form-label">Focus Level</label>
+                                <select className="form-select form-select-sm" value={selectedFocusLevel?.column_name || ''} onChange={handleFocusLevelChange} disabled={loading || !selectedFocusLevel}>
+                                    {focusLevels.map(l => <option key={l.column_name} value={l.column_name}>{l.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="spacer"></div>
+                            <div className="section-title">Active Filters</div>
+                            {filters.length === 0 ? (
+                                <p className="text-muted">No filters applied. Click a bar to add a filter.</p>
+                            ) : (
+                                <ul className="list-group mb-2">
+                                    {filters.map((f, i) => (
+                                        <li className="list-group-item d-flex justify-content-between align-items-center" key={`${f.column_name}-${i}`}>
+                                            <span><strong>{f.name}:</strong> {f.value}</span>
+                                            <button className="btn btn-sm btn-outline-secondary" onClick={() => { setFilters(prev => prev.filter((_, idx) => idx !== i)); showSnackbar(`Removed filter: ${f.name} = ${f.value}`, 'info'); }}>Remove</button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            {filters.length > 0 && (
+                                <button className="btn btn-sm btn-outline-secondary" onClick={() => { setFilters([]); showSnackbar('Cleared all filters', 'info'); }}>Clear all</button>
+                            )}
+                            {error && (
+                                <div className="alert alert-danger mt-3" role="alert"><i className="fas fa-exclamation-triangle me-2"></i>{error}</div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="split-right">
+                        <div className="card shadow-purple h-100">
+                            <div className="card-header">
+                                <h5 className="mb-0"><i className="fas fa-chart-bar me-2"></i>Say/Do Ratio by {selectedFocusLevel?.name || 'Focus Level'}</h5>
+                            </div>
+                            <div className="card-body" style={{height: '70vh'}}>
+                                {chartError ? (
+                                    <div className="alert alert-danger" role="alert">
+                                        <i className="fas fa-exclamation-triangle me-2"></i>{chartError}
+                                    </div>
+                                ) : loading ? (
+                                    <div className="text-center py-5">
+                                        <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div>
+                                        <p className="mt-3 text-muted">Loading chart data...</p>
+                                    </div>
+                                ) : chartData.length === 0 ? (
+                                    <div className="text-center py-5">
+                                        <i className="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                                        <p className="text-muted">No data available for the selected criteria.</p>
+                                    </div>
+                                ) : (
+                                    <div style={{height: '100%'}}>
+                                        <canvas ref={chartRef}></canvas>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    {snackbar && (
+                        <div className={`alert ${snackbar.variant === 'success' ? 'alert-success' : snackbar.variant === 'warning' ? 'alert-warning' : 'alert-info'} shadow-purple position-fixed`} role="alert" style={{ bottom: '1rem', right: '1rem', zIndex: 1080 }}>
+                            {snackbar.message}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('app'));
+        root.render(<DashboardSplit />);
+    </script>
+</body>
+</html>
+
