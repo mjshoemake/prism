@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purple & Black Theme Demo</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Custom Purple & Black Theme -->
+    <link rel="stylesheet" href="purple-black-theme.css">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-gem me-2"></i>Prism UI
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Features</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Contact</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="bg-gradient-primary py-5">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="display-4 fw-bold text-light-purple purple-text-shadow">
+                        Welcome to Prism UI
+                    </h1>
+                    <p class="lead text-light-purple">
+                        Experience the power of our purple and black theme with Bootstrap components.
+                    </p>
+                    <div class="d-flex gap-3">
+                        <button class="btn btn-primary btn-lg">
+                            <i class="fas fa-rocket me-2"></i>Get Started
+                        </button>
+                        <button class="btn btn-outline-primary btn-lg">
+                            <i class="fas fa-play me-2"></i>Watch Demo
+                        </button>
+                    </div>
+                </div>
+                <div class="col-lg-6 text-center">
+                    <div class="purple-glow p-4 rounded">
+                        <i class="fas fa-palette display-1 text-primary"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-4">
+                    <div class="card shadow-purple h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-mobile-alt fa-3x text-primary mb-3"></i>
+                            <h5 class="card-title">Responsive Design</h5>
+                            <p class="card-text text-muted">
+                                Fully responsive components that work perfectly on all devices.
+                            </p>
+                            <button class="btn btn-primary">Learn More</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4 mb-4">
+                    <div class="card shadow-purple h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-bolt fa-3x text-accent mb-3"></i>
+                            <h5 class="card-title">Fast Performance</h5>
+                            <p class="card-text text-muted">
+                                Optimized CSS with minimal overhead for lightning-fast loading.
+                            </p>
+                            <button class="btn btn-secondary">Learn More</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4 mb-4">
+                    <div class="card shadow-purple h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-cogs fa-3x text-primary mb-3"></i>
+                            <h5 class="card-title">Customizable</h5>
+                            <p class="card-text text-muted">
+                                Easy to customize with CSS variables and utility classes.
+                            </p>
+                            <button class="btn btn-outline-primary">Learn More</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Forms Section -->
+    <section class="py-5 bg-darker">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-6">
+                    <h2 class="text-light-purple mb-4">Contact Form</h2>
+                    <form>
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Full Name</label>
+                            <input type="text" class="form-control" id="name" placeholder="Enter your name">
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="email" placeholder="Enter your email">
+                        </div>
+                        <div class="mb-3">
+                            <label for="subject" class="form-label">Subject</label>
+                            <select class="form-select" id="subject">
+                                <option selected>Choose a subject</option>
+                                <option value="1">General Inquiry</option>
+                                <option value="2">Support</option>
+                                <option value="3">Sales</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="message" class="form-label">Message</label>
+                            <textarea class="form-control" id="message" rows="4" placeholder="Enter your message"></textarea>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="newsletter">
+                            <label class="form-check-label" for="newsletter">
+                                Subscribe to our newsletter
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane me-2"></i>Send Message
+                        </button>
+                    </form>
+                </div>
+                <div class="col-lg-6">
+                    <h2 class="text-light-purple mb-4">Alerts & Notifications</h2>
+                    <div class="alert alert-primary" role="alert">
+                        <i class="fas fa-info-circle me-2"></i>
+                        This is a primary alert with purple styling!
+                    </div>
+                    <div class="alert alert-secondary" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        This is a secondary alert with darker purple styling!
+                    </div>
+                    <div class="alert alert-success" role="alert">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Success! Your action was completed successfully.
+                    </div>
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Warning! Please review your input before proceeding.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tables Section -->
+    <section class="py-5">
+        <div class="container">
+            <h2 class="text-center text-light-purple mb-5">Data Tables</h2>
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="card shadow-purple">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-table me-2"></i>Sample Data Table
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-dark table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Name</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>1</td>
+                                            <td>John Doe</td>
+                                            <td><span class="badge bg-primary">Active</span></td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary me-1">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>2</td>
+                                            <td>Jane Smith</td>
+                                            <td><span class="badge bg-secondary">Inactive</span></td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary me-1">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>3</td>
+                                            <td>Bob Johnson</td>
+                                            <td><span class="badge bg-primary">Active</span></td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary me-1">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Progress & List Groups Section -->
+    <section class="py-5 bg-darker">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-6">
+                    <h3 class="text-light-purple mb-4">Progress Bars</h3>
+                    <div class="mb-3">
+                        <label class="form-label">Project Progress</label>
+                        <div class="progress mb-2">
+                            <div class="progress-bar" role="progressbar" style="width: 75%">75%</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Team Performance</label>
+                        <div class="progress mb-2">
+                            <div class="progress-bar bg-secondary" role="progressbar" style="width: 60%">60%</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Customer Satisfaction</label>
+                        <div class="progress mb-2">
+                            <div class="progress-bar bg-accent" role="progressbar" style="width: 90%">90%</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="text-light-purple mb-4">List Groups</h3>
+                    <div class="list-group">
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-check-circle text-success me-2"></i>
+                                Task Completed
+                            </div>
+                            <span class="badge bg-primary rounded-pill">1</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-clock text-warning me-2"></i>
+                                Task In Progress
+                            </div>
+                            <span class="badge bg-secondary rounded-pill">2</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-pause-circle text-info me-2"></i>
+                                Task Paused
+                            </div>
+                            <span class="badge bg-accent rounded-pill">3</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-times-circle text-danger me-2"></i>
+                                Task Failed
+                            </div>
+                            <span class="badge bg-danger rounded-pill">4</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pagination & Dropdowns Section -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-6">
+                    <h3 class="text-light-purple mb-4">Pagination</h3>
+                    <nav aria-label="Page navigation example">
+                        <ul class="pagination">
+                            <li class="page-item">
+                                <a class="page-link" href="#" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item"><a class="page-link" href="#">1</a></li>
+                            <li class="page-item active"><a class="page-link" href="#">2</a></li>
+                            <li class="page-item"><a class="page-link" href="#">3</a></li>
+                            <li class="page-item">
+                                <a class="page-link" href="#" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="text-light-purple mb-4">Dropdowns</h3>
+                    <div class="dropdown">
+                        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog me-2"></i>Settings
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Profile</a></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-bell me-2"></i>Notifications</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-darkest py-4">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-6">
+                    <h5 class="text-primary">
+                        <i class="fas fa-gem me-2"></i>Prism UI
+                    </h5>
+                    <p class="text-muted">
+                        A beautiful purple and black theme for Bootstrap applications.
+                    </p>
+                </div>
+                <div class="col-lg-6 text-lg-end">
+                    <div class="d-flex justify-content-lg-end gap-3">
+                        <a href="#" class="text-primary">
+                            <i class="fab fa-twitter fa-lg"></i>
+                        </a>
+                        <a href="#" class="text-primary">
+                            <i class="fab fa-github fa-lg"></i>
+                        </a>
+                        <a href="#" class="text-primary">
+                            <i class="fab fa-linkedin fa-lg"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <hr class="my-4" style="border-color: var(--bs-border-color);">
+            <div class="row">
+                <div class="col-12 text-center">
+                    <p class="text-muted mb-0">
+                        &copy; 2024 Prism UI. All rights reserved.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

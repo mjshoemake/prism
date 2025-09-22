@@ -4,11 +4,11 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 
 @Service
-class DynamicQueryService {
+class SprintMetricsService {
 
     private final JdbcTemplate jdbcTemplate
 
-    DynamicQueryService(JdbcTemplate jdbcTemplate) {
+    SprintMetricsService(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate
     }
 
@@ -35,6 +35,30 @@ class DynamicQueryService {
             ${whereClause}
             GROUP BY ${focusLevelColumn}
             ORDER BY ${focusLevelColumn}
+        """
+        println("SQL: $sql")
+        jdbcTemplate.queryForList(sql)
+    }
+
+    /**
+     * Runs a dynamically‐built SQL using the three template pieces.
+     * WARNING: unsanitized input = SQL injection risk. You should validate
+     * focusLevelColumn and valueColumnsForSelectClause against a whitelist.
+     */
+    List<Map<String, Object>> fetchFocusAreas() {
+        def sql = """
+            SELECT focus_area_pk, name
+            FROM "prism"."Focus_Areas" fa
+        """
+        println("SQL: $sql")
+        jdbcTemplate.queryForList(sql)
+    }
+
+    List<Map<String, Object>> fetchFocusLevels(String focusAreaPK) {
+        def sql = """
+            SELECT focus_area_pk, name, column_name
+            FROM "prism"."Focus_Levels" fl
+            WHERE focus_area_pk = $focusAreaPK 
         """
         println("SQL: $sql")
         jdbcTemplate.queryForList(sql)

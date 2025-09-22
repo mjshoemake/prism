@@ -1,0 +1,7 @@
+{
+  "focusLevelColumn": "year_month",
+  "valueColumnsForSelectClause": "ROUND((SUM(smf.committed_story_points_completed)::DECIMAL / SUM(smf.committed_story_points)::DECIMAL) * 100, 2) as \"Say/Do Ratio\"",
+  "whereClause": "WHERE level_2_name = 'Sarah Williams' and year_quarter ='2024 Q4'"
+}
+
+
