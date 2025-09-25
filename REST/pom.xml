@@ -9,8 +9,8 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.prism</groupId>
-	<artifactId>api</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<artifactId>prism-api</artifactId>
+	<version>1.0.0</version>
 	<name>api</name>
 	<description>Prism API Project</description>
 	<url/>
@@ -67,7 +67,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>prism-api-${project.version}</finalName>
+<!--		<finalName>prism-api-${project.version}</finalName>   -->
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
