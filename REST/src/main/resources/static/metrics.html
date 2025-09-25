@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Metrics - Purple & Black Theme</title>
+    <title>Prism - Purple & Black Theme</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="purple-black-theme.css">
@@ -25,6 +25,33 @@
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
             <a class="navbar-brand fs-4" href="#"><i class="fas fa-chart-bar me-2"></i>Prism</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Dashboard
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" id="nav-metrics">Metrics</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Admin
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" id="nav-users">Users</a></li>
+                        </ul>
+                    </li>
+                </ul>
+                <div class="d-flex">
+                    <button class="btn btn-outline-secondary btn-sm" id="nav-login-btn" style="display:none;">Login</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="nav-logout-btn" style="display:none;">Logout</button>
+                </div>
+            </div>
         </div>
     </nav>
 
@@ -34,6 +61,13 @@
         const { useState, useEffect, useRef } = React;
 
         const purpleTheme = { primary: '#6f42c1', primaryDark: '#5a2d9e', primaryLight: '#8b5fd6', accent: '#8e44ad', textLight: '#e6d9f2', textMuted: '#b8a9d9', white: '#ffffff' };
+
+        // Simple SPA shell with auth + view routing
+        const Views = {
+            Login: 'login',
+            Metrics: 'metrics',
+            Users: 'users'
+        };
 
         const Metrics = () => {
             const [focusAreas, setFocusAreas] = useState([]);
@@ -189,8 +223,238 @@
             );
         };
 
+        const LoginView = ({ onLogin }) => {
+            const [email, setEmail] = React.useState('');
+            const [password, setPassword] = React.useState('');
+            const [msg, setMsg] = React.useState(null);
+            const submit = (e) => {
+                e.preventDefault();
+                // Placeholder: Accept any non-empty for demo. Replace with real auth later.
+                if (email && password) { onLogin({ email }); }
+                else setMsg('Enter email and password');
+            };
+            return (
+                <div className="container py-4" style={{ maxWidth: '480px' }}>
+                    <div className="card shadow-purple">
+                        <div className="card-header"><h5 className="mb-0">Login</h5></div>
+                        <div className="card-body">
+                            {msg && (<div className="alert alert-warning" role="alert">{msg}</div>)}
+                            <form onSubmit={submit}>
+                                <div className="mb-3">
+                                    <label className="form-label">Email</label>
+                                    <input className="form-control" type="email" value={email} onChange={e=>setEmail(e.target.value)} />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Password</label>
+                                    <input className="form-control" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+                                </div>
+                                <button className="btn btn-primary" type="submit">Login</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const UsersView = ({ showSnackbar }) => {
+            const [users, setUsers] = React.useState([]);
+            const [loading, setLoading] = React.useState(true);
+            const [error, setError] = React.useState(null);
+            const [form, setForm] = React.useState({ enterprise_pk: '', email: '', username: '' });
+            const [saving, setSaving] = React.useState(false);
+
+            const load = async () => {
+                try {
+                    setLoading(true);
+                    const res = await fetch('/api/users');
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    setUsers(await res.json());
+                } catch (e) { setError(e.message); } finally { setLoading(false); }
+            };
+
+            React.useEffect(() => { load(); }, []);
+
+            const create = async (e) => {
+                e.preventDefault();
+                if (!form.enterprise_pk || !form.email) {
+                    showSnackbar('Enterprise PK and Email are required', 'warning');
+                    return;
+                }
+                try {
+                    setSaving(true);
+                    const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    setForm({ enterprise_pk: '', email: '', username: '' });
+                    await load();
+                    showSnackbar('User created successfully', 'success');
+                } catch (e) { showSnackbar('Create failed: ' + e.message, 'warning'); } finally { setSaving(false); }
+            };
+
+            const saveRow = async (u) => {
+                try {
+                    const res = await fetch(`/api/users/${u.user_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: u.email, username: u.username, isActive: u.is_active }) });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    await load();
+                    showSnackbar('User updated successfully', 'success');
+                } catch (e) { showSnackbar('Update failed: ' + e.message, 'warning'); }
+            };
+
+            const deleteRow = async (u) => {
+                if (!confirm('Delete this user?')) return;
+                try {
+                    const res = await fetch(`/api/users/${u.user_id}`, { method: 'DELETE' });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    await load();
+                    showSnackbar('User deleted successfully', 'success');
+                } catch (e) { showSnackbar('Delete failed: ' + e.message, 'warning'); }
+            };
+
+            const resetPassword = async (u) => {
+                // For now, prompt a new password (later: call endpoint to set enterprise temp)
+                const p = prompt('Enter a new password for this user:');
+                if (!p) return;
+                try {
+                    const res = await fetch(`/api/users/${u.user_id}/password`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: p }) });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    showSnackbar('Password updated successfully', 'success');
+                } catch (e) { showSnackbar('Password update failed: ' + e.message, 'warning'); }
+            };
+
+            return (
+                <div className="container py-3 w-100">
+                    <div className="row">
+                        <div className="col-lg-4">
+                            <div className="card shadow-purple mb-3">
+                                <div className="card-header"><h6 className="mb-0">Create User</h6></div>
+                                <div className="card-body">
+                                    <form onSubmit={create}>
+                                        <div className="mb-2">
+                                            <label className="form-label">Enterprise PK</label>
+                                            <input className="form-control" type="number" value={form.enterprise_pk} onChange={e=>setForm({ ...form, enterprise_pk: e.target.value })} required />
+                                        </div>
+                                        <div className="mb-2">
+                                            <label className="form-label">Email</label>
+                                            <input className="form-control" type="email" value={form.email} onChange={e=>setForm({ ...form, email: e.target.value })} required />
+                                        </div>
+                                        <div className="mb-3">
+                                            <label className="form-label">Username</label>
+                                            <input className="form-control" type="text" value={form.username} onChange={e=>setForm({ ...form, username: e.target.value })} />
+                                        </div>
+                                        <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Create'}</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-lg-8">
+                            <div className="card shadow-purple">
+                                <div className="card-header d-flex justify-content-between align-items-center">
+                                    <h6 className="mb-0">Users</h6>
+                                    <button className="btn btn-sm btn-outline-secondary" onClick={load}>Refresh</button>
+                                </div>
+                                <div className="card-body">
+                                    {loading ? (
+                                        <div className="text-center py-5">
+                                            <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div>
+                                        </div>
+                                    ) : error ? (
+                                        <div className="alert alert-danger" role="alert">{error}</div>
+                                    ) : (
+                                        <div className="table-responsive">
+                                            <table className="table table-dark table-hover align-middle">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Email</th>
+                                                        <th>Username</th>
+                                                        <th>Enterprise</th>
+                                                        <th>Active</th>
+                                                        <th>Temp PW</th>
+                                                        <th></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {users.map(u => (
+                                                        <tr key={u.user_id}>
+                                                            <td><input className="form-control form-control-sm" value={u.email||''} onChange={e=>{u.email=e.target.value; setUsers([...users]);}} /></td>
+                                                            <td><input className="form-control form-control-sm" value={u.username||''} onChange={e=>{u.username=e.target.value; setUsers([...users]);}} /></td>
+                                                            <td>{u.enterprise_pk}</td>
+                                                            <td>
+                                                                <input type="checkbox" className="form-check-input" checked={!!u.is_active} onChange={e=>{u.is_active=e.target.checked; setUsers([...users]);}} />
+                                                            </td>
+                                                            <td>{u.is_temp_password ? 'Yes' : 'No'}</td>
+                                                            <td className="text-end">
+                                                                <div className="btn-group">
+                                                                    <button className="btn btn-sm btn-outline-primary" onClick={()=>saveRow(u)}>Save</button>
+                                                                    <button className="btn btn-sm btn-outline-warning" onClick={()=>resetPassword(u)}>Set Password</button>
+                                                                    <button className="btn btn-sm btn-outline-secondary" onClick={()=>deleteRow(u)}>Delete</button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [auth, setAuth] = React.useState(() => {
+                try { return JSON.parse(localStorage.getItem('prism_auth') || 'null'); } catch { return null; }
+            });
+            const [view, setView] = React.useState(Views.Metrics);
+            const [snackbar, setSnackbar] = React.useState(null);
+
+            const showSnackbar = (message, variant = 'info') => {
+                setSnackbar({ message, variant });
+                window.clearTimeout(showSnackbar._t);
+                showSnackbar._t = window.setTimeout(() => setSnackbar(null), 3000);
+            };
+
+            React.useEffect(() => {
+                const loginBtn = document.getElementById('nav-login-btn');
+                const logoutBtn = document.getElementById('nav-logout-btn');
+                const navMetrics = document.getElementById('nav-metrics');
+                const navUsers = document.getElementById('nav-users');
+                const sync = () => {
+                    if (auth) { loginBtn.style.display='none'; logoutBtn.style.display='inline-block'; }
+                    else { loginBtn.style.display='inline-block'; logoutBtn.style.display='none'; }
+                };
+                sync();
+                loginBtn.onclick = (e)=>{ e.preventDefault(); setView(Views.Login); };
+                logoutBtn.onclick = (e)=>{ e.preventDefault(); setAuth(null); localStorage.removeItem('prism_auth'); setView(Views.Metrics); };
+                navMetrics.onclick = (e)=>{ e.preventDefault(); setView(Views.Metrics); };
+                navUsers.onclick = (e)=>{ e.preventDefault(); setView(Views.Users); };
+            }, [auth]);
+
+            React.useEffect(() => {
+                if (auth) localStorage.setItem('prism_auth', JSON.stringify(auth));
+            }, [auth]);
+
+            if (!auth && view !== Views.Login) {
+                return <LoginView onLogin={(u)=>{ setAuth(u); setView(Views.Metrics); showSnackbar('Welcome!', 'success'); }} />
+            }
+
+            return (
+                <>
+                    {view === Views.Login ? <LoginView onLogin={(u)=>{ setAuth(u); setView(Views.Metrics); showSnackbar('Welcome!', 'success'); }} /> :
+                     view === Views.Users ? <UsersView showSnackbar={showSnackbar} /> :
+                     <Metrics />}
+                    {snackbar && (
+                        <div className={`alert ${snackbar.variant === 'success' ? 'alert-success' : snackbar.variant === 'warning' ? 'alert-warning' : 'alert-info'} shadow-purple position-fixed`} role="alert" style={{ bottom: '1rem', right: '1rem', zIndex: 1080 }}>
+                            {snackbar.message}
+                        </div>
+                    )}
+                </>
+            );
+        };
+
         const root = ReactDOM.createRoot(document.getElementById('app'));
-        root.render(<Metrics />);
+        root.render(<App />);
     </script>
 </body>
 </html>

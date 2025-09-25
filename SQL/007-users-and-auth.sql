@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;  -- for gen_random_uuid()
 CREATE EXTENSION IF NOT EXISTS citext;    -- case-insensitive text type
 
 -- Table: prism.users
-CREATE TABLE IF NOT EXISTS "prism"."users" (
+CREATE TABLE IF NOT EXISTS "prism"."Users" (
   user_id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   enterprise_pk         BIGINT      NOT NULL,
   email                 CITEXT      NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS "prism"."users" (
 );
 
 -- Unique constraint on email (idempotent via index + attach)
-CREATE UNIQUE INDEX IF NOT EXISTS prism_users_email_uk_idx ON "prism"."users" (email);
+CREATE UNIQUE INDEX IF NOT EXISTS prism_users_email_uk_idx ON "prism"."Users" (email);
 
 DO $$
 BEGIN
@@ -32,7 +32,7 @@ BEGIN
     SELECT 1 FROM pg_constraint
     WHERE conname = 'prism_users_email_uk'
   ) THEN
-    ALTER TABLE "prism"."users"
+    ALTER TABLE "prism"."Users"
       ADD CONSTRAINT prism_users_email_uk UNIQUE USING INDEX prism_users_email_uk_idx;
   END IF;
 END$$;
@@ -51,23 +51,23 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_trigger
     WHERE tgname = 'users_set_updated_at'
-      AND tgrelid = '"prism"."users"'::regclass
+      AND tgrelid = '"prism"."Users"'::regclass
   ) THEN
-    DROP TRIGGER users_set_updated_at ON "prism"."users";
+    DROP TRIGGER users_set_updated_at ON "prism"."Users";
   END IF;
 
   CREATE TRIGGER users_set_updated_at
-  BEFORE UPDATE ON "prism"."users"
+  BEFORE UPDATE ON "prism"."Users"
   FOR EACH ROW EXECUTE FUNCTION "prism".set_updated_at();
 END$$;
 
 -- Optional helpful indexes (re-runnable)
 -- Lookups by username
-CREATE INDEX IF NOT EXISTS prism_users_username_idx ON "prism"."users" (username);
+CREATE INDEX IF NOT EXISTS prism_users_username_idx ON "prism"."Users" (username);
 -- Active users filtering
-CREATE INDEX IF NOT EXISTS prism_users_is_active_idx ON "prism"."users" (is_active);
+CREATE INDEX IF NOT EXISTS prism_users_is_active_idx ON "prism"."Users" (is_active);
 -- Enterprise filter
-CREATE INDEX IF NOT EXISTS prism_users_enterprise_idx ON "prism"."users" (enterprise_pk);
+CREATE INDEX IF NOT EXISTS prism_users_enterprise_idx ON "prism"."Users" (enterprise_pk);
 
 -- When updating password, is_temp_password should be set to false by the app. For safety,
 -- you can add a helper function to force it when an explicit flag is missing (optional):
@@ -78,8 +78,8 @@ CREATE INDEX IF NOT EXISTS prism_users_enterprise_idx ON "prism"."users" (enterp
 --   RETURN NEW;
 -- END; $$ LANGUAGE plpgsql;
 -- DO $$ BEGIN
---   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='users_unset_temp_password' AND tgrelid='"prism"."users"'::regclass) THEN
---     CREATE TRIGGER users_unset_temp_password BEFORE UPDATE OF password_hash ON "prism"."users"
+--   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='users_unset_temp_password' AND tgrelid='"prism"."Users"'::regclass) THEN
+--     CREATE TRIGGER users_unset_temp_password BEFORE UPDATE OF password_hash ON "prism"."Users"
 --     FOR EACH ROW EXECUTE FUNCTION "prism".unset_temp_password();
 --   END IF;
 -- END $$;
@@ -91,15 +91,27 @@ BEGIN
     SELECT 1 FROM information_schema.table_constraints
     WHERE constraint_name = 'users_enterprise_fk'
       AND table_schema = 'prism'
-      AND table_name = 'users'
+      AND table_name = 'Users'
   ) THEN
-    ALTER TABLE "prism"."users"
+    ALTER TABLE "prism"."Users"
       ADD CONSTRAINT users_enterprise_fk
       FOREIGN KEY (enterprise_pk)
-      REFERENCES "prism"."enterprises" (enterprise_pk)
+      REFERENCES "prism"."Enterprises" (enterprise_pk)
       ON UPDATE RESTRICT
       ON DELETE RESTRICT;
   END IF;
 END$$;
 
-
+INSERT INTO "prism"."Users" (enterprise_pk,
+                             email,
+                             username,
+                             password_hash,
+                             password_algo,
+                             password_params
+)
+VALUES (1, 
+        'atlantatechie@gmail.com',
+        'atlantatechie@gmail.com',
+        '$2a$12$7VT0Jd3.j0Z75UtTd0eUxOj6R9Nl/.nM7J73jytPNb9i/6897dl6O',
+        'bcrypt',
+        '{}');

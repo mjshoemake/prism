@@ -4,6 +4,7 @@ import org.springframework.dao.EmptyResultDataAccessException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.crypto.bcrypt.BCrypt
 import org.springframework.stereotype.Service
+import com.prism.api.common.utils.SecurityUtils
 
 @Service
 class UsersService {
@@ -51,7 +52,7 @@ class UsersService {
 
     int updatePassword(String userId, String rawPassword) {
         String algo = 'bcrypt'
-        String hash = BCrypt.hashpw(rawPassword, BCrypt.gensalt(12))
+        String hash = SecurityUtils.encryptPassword(rawPassword);
         def paramsJson = '{"cost":12}'
         def sql = 'UPDATE "prism"."users" SET password_hash = ?, password_algo = ?, password_params = ?, password_updated_at = now(), is_temp_password = FALSE WHERE user_id = ?'
         jdbcTemplate.update(sql, hash, algo, paramsJson, userId)

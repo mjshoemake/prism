@@ -2,7 +2,7 @@
 CREATE SCHEMA IF NOT EXISTS "prism";
 
 -- Table
-CREATE TABLE IF NOT EXISTS "prism"."enterprises" (
+CREATE TABLE IF NOT EXISTS "prism"."Enterprises" (
   enterprise_pk BIGSERIAL PRIMARY KEY,
   name          TEXT        NOT NULL,
   url           TEXT        NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS "prism"."enterprises" (
 -- -- NOTE: If you add the above later, run: VALIDATE CONSTRAINT enterprises_url_http_check;
 
 -- Unique name (idempotent via index)
-CREATE UNIQUE INDEX IF NOT EXISTS enterprises_name_uk_idx ON "prism"."enterprises" (name);
+CREATE UNIQUE INDEX IF NOT EXISTS enterprises_name_uk_idx ON "prism"."Enterprises" (name);
 
 DO $$
 BEGIN
@@ -27,7 +27,7 @@ BEGIN
     SELECT 1 FROM pg_constraint
     WHERE conname = 'enterprises_name_uk'
   ) THEN
-    ALTER TABLE "prism"."enterprises"
+    ALTER TABLE "prism"."Enterprises"
       ADD CONSTRAINT enterprises_name_uk UNIQUE USING INDEX enterprises_name_uk_idx;
   END IF;
 END$$;
@@ -45,12 +45,13 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_trigger
     WHERE tgname = 'enterprises_set_updated_at'
-      AND tgrelid = '"prism"."enterprises"'::regclass
+      AND tgrelid = '"prism"."Enterprises"'::regclass
   ) THEN
     DROP TRIGGER enterprises_set_updated_at ON "prism"."enterprises";
   END IF;
 
   CREATE TRIGGER enterprises_set_updated_at
-  BEFORE UPDATE ON "prism"."enterprises"
+  BEFORE UPDATE ON "prism"."Enterprises"
   FOR EACH ROW EXECUTE FUNCTION "prism".set_updated_at();
 END$$;
+
