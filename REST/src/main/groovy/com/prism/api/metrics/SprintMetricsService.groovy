@@ -1,4 +1,4 @@
-package com.prism.api.web
+package com.prism.api.metrics
 
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service

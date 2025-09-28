@@ -1,4 +1,4 @@
-package com.prism.api.web
+package com.prism.api.metrics
 
 class SprintMetricsRequest {
     String focusLevelColumn;

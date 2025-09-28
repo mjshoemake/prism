@@ -1,8 +1,7 @@
-package com.prism.api.web
+package com.prism.api.admin
 
 import org.springframework.dao.EmptyResultDataAccessException
 import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.security.crypto.bcrypt.BCrypt
 import org.springframework.stereotype.Service
 import com.prism.api.common.utils.SecurityUtils
 

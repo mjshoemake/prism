@@ -1,4 +1,4 @@
-package com.prism.api.web
+package com.prism.api.metrics
 
 
 import com.prism.common.exceptions.ParameterValueRequiredException

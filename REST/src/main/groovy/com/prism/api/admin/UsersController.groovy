@@ -1,4 +1,4 @@
-package com.prism.api.web
+package com.prism.api.admin
 
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
