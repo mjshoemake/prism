@@ -61,6 +61,77 @@ class UsersService {
         def sql = 'DELETE FROM "prism"."users" WHERE user_id = ?'
         jdbcTemplate.update(sql, userId)
     }
+
+    Map<String, Object> authenticateUser(String email, String password) {
+        def sql = '''
+            SELECT user_id, enterprise_pk, email, username, password_hash, password_algo, 
+                   is_active, is_temp_password, failed_login_count, locked_until, last_login_at 
+            FROM "prism"."users" 
+            WHERE email = ? AND is_active = TRUE
+        '''
+        try {
+            def user = jdbcTemplate.queryForMap(sql, email)
+            
+            // Check if account is locked
+            if (user.locked_until && user.locked_until > new Date()) {
+                return [success: false, message: 'Account is temporarily locked. Please try again later.']
+            }
+            
+            // Verify password
+            if (SecurityUtils.verifyPassword(password, user.password_hash)) {
+                // Reset failed login count and update last login
+                def updateSql = '''
+                    UPDATE "prism"."users" 
+                    SET failed_login_count = 0, last_login_at = now() 
+                    WHERE user_id = ?
+                '''
+                jdbcTemplate.update(updateSql, user.user_id)
+                
+                // Return user info (without password hash)
+                user.remove('password_hash')
+                user.remove('password_algo')
+                return [success: true, user: user]
+            } else {
+                // Increment failed login count
+                incrementFailedLoginCount(user.user_id)
+                return [success: false, message: 'Invalid email or password.']
+            }
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            return [success: false, message: 'Invalid email or password.']
+        }
+    }
+
+    private void incrementFailedLoginCount(String userId) {
+        def sql = '''
+            UPDATE "prism"."users" 
+            SET failed_login_count = failed_login_count + 1,
+                locked_until = CASE 
+                    WHEN failed_login_count + 1 >= 5 THEN now() + INTERVAL '15 minutes'
+                    ELSE locked_until
+                END
+            WHERE user_id = ?
+        '''
+        jdbcTemplate.update(sql, userId)
+    }
+
+    Map<String, Object> changePassword(String userId, String currentPassword, String newPassword) {
+        // First verify current password
+        def sql = 'SELECT password_hash FROM "prism"."users" WHERE user_id = ? AND is_active = TRUE'
+        try {
+            def currentHash = jdbcTemplate.queryForObject(sql, String.class, userId)
+            
+            if (!SecurityUtils.verifyPassword(currentPassword, currentHash)) {
+                return [success: false, message: 'Current password is incorrect.']
+            }
+            
+            // Update password
+            updatePassword(userId, newPassword)
+            return [success: true, message: 'Password changed successfully.']
+            
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            return [success: false, message: 'User not found.']
+        }
+    }
 }
 
 

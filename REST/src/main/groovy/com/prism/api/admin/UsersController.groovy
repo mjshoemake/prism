@@ -64,6 +64,19 @@ class UsersController {
         ResponseEntity.noContent().build()
     }
 
+    static class ResetPasswordRequest {
+        String newPassword
+    }
+
+    @PutMapping('{userId}/reset-password')
+    ResponseEntity<Void> resetPassword(@PathVariable String userId, @RequestBody ResetPasswordRequest req) {
+        if (!req?.newPassword) {
+            return ResponseEntity.badRequest().build()
+        }
+        svc.updatePassword(userId, req.newPassword)
+        ResponseEntity.noContent().build()
+    }
+
     @DeleteMapping('{userId}')
     ResponseEntity<Void> deleteUser(@PathVariable String userId) {
         svc.deleteUser(userId)

@@ -8,4 +8,8 @@ class SecurityUtils {
         return BCrypt.hashpw(rawPassword, BCrypt.gensalt(12))
     }
 
+    static boolean verifyPassword(String rawPassword, String hashedPassword) {
+        return BCrypt.checkpw(rawPassword, hashedPassword)
+    }
+
 }
