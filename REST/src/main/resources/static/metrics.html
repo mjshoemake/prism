@@ -44,6 +44,7 @@
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="#" id="nav-users">Users</a></li>
+                            <li><a class="dropdown-item" href="#" id="nav-change-password">Change Password</a></li>
                         </ul>
                     </li>
                 </ul>
@@ -66,7 +67,8 @@
         const Views = {
             Login: 'login',
             Metrics: 'metrics',
-            Users: 'users'
+            Users: 'users',
+            ChangePassword: 'change-password'
         };
 
         const Metrics = () => {
@@ -432,6 +434,125 @@
             );
         };
 
+        const ChangePasswordView = ({ auth, showSnackbar }) => {
+            const [currentPassword, setCurrentPassword] = React.useState('');
+            const [newPassword, setNewPassword] = React.useState('');
+            const [confirmPassword, setConfirmPassword] = React.useState('');
+            const [loading, setLoading] = React.useState(false);
+            const [msg, setMsg] = React.useState(null);
+
+            const submit = async (e) => {
+                e.preventDefault();
+                setMsg(null);
+
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                    setMsg('All fields are required');
+                    return;
+                }
+
+                if (newPassword.length < 8) {
+                    setMsg('New password must be at least 8 characters long');
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    setMsg('New password and confirmation do not match');
+                    return;
+                }
+
+                const userId = auth?.user?.user_id || auth?.user_id;
+                if (!userId) {
+                    setMsg('User information not available. Please log in again.');
+                    return;
+                }
+
+                setLoading(true);
+                try {
+                    const response = await fetch('/api/auth/change-password', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-User-ID': userId
+                        },
+                        body: JSON.stringify({
+                            currentPassword,
+                            newPassword
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.success) {
+                        setMsg(data.message || 'Password change failed');
+                        setLoading(false);
+                        return;
+                    }
+
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setMsg(null);
+                    showSnackbar('Password changed successfully', 'success');
+                } catch (err) {
+                    setMsg('Password change failed: ' + err.message);
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="container py-4" style={{ maxWidth: '480px' }}>
+                    <div className="card shadow-purple">
+                        <div className="card-header">
+                            <h5 className="mb-0">Change Password</h5>
+                        </div>
+                        <div className="card-body">
+                            {msg && (
+                                <div className={`alert ${msg.includes('successfully') ? 'alert-success' : 'alert-warning'}`} role="alert">
+                                    {msg}
+                                </div>
+                            )}
+                            <form onSubmit={submit}>
+                                <div className="mb-3">
+                                    <label className="form-label">Current Password</label>
+                                    <input
+                                        className="form-control"
+                                        type="password"
+                                        value={currentPassword}
+                                        onChange={e => setCurrentPassword(e.target.value)}
+                                        disabled={loading}
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">New Password</label>
+                                    <input
+                                        className="form-control"
+                                        type="password"
+                                        value={newPassword}
+                                        onChange={e => setNewPassword(e.target.value)}
+                                        disabled={loading}
+                                    />
+                                    <small className="form-text text-muted">Must be at least 8 characters long</small>
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Confirm New Password</label>
+                                    <input
+                                        className="form-control"
+                                        type="password"
+                                        value={confirmPassword}
+                                        onChange={e => setConfirmPassword(e.target.value)}
+                                        disabled={loading}
+                                    />
+                                </div>
+                                <button className="btn btn-primary" type="submit" disabled={loading}>
+                                    {loading ? 'Changing Password...' : 'Change Password'}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const App = () => {
             const [auth, setAuth] = React.useState(() => {
                 try { return JSON.parse(localStorage.getItem('prism_auth') || 'null'); } catch { return null; }
@@ -450,6 +571,7 @@
                 const logoutBtn = document.getElementById('nav-logout-btn');
                 const navMetrics = document.getElementById('nav-metrics');
                 const navUsers = document.getElementById('nav-users');
+                const navChangePassword = document.getElementById('nav-change-password');
                 const sync = () => {
                     if (auth) { loginBtn.style.display='none'; logoutBtn.style.display='inline-block'; }
                     else { loginBtn.style.display='inline-block'; logoutBtn.style.display='none'; }
@@ -459,6 +581,7 @@
                 logoutBtn.onclick = (e)=>{ e.preventDefault(); setAuth(null); localStorage.removeItem('prism_auth'); setView(Views.Metrics); };
                 navMetrics.onclick = (e)=>{ e.preventDefault(); setView(Views.Metrics); };
                 navUsers.onclick = (e)=>{ e.preventDefault(); setView(Views.Users); };
+                navChangePassword.onclick = (e)=>{ e.preventDefault(); setView(Views.ChangePassword); };
             }, [auth]);
 
             React.useEffect(() => {
@@ -473,6 +596,7 @@
                 <>
                     {view === Views.Login ? <LoginView onLogin={(u)=>{ setAuth(u); setView(Views.Metrics); showSnackbar('Welcome!', 'success'); }} /> :
                      view === Views.Users ? <UsersView showSnackbar={showSnackbar} /> :
+                     view === Views.ChangePassword ? <ChangePasswordView auth={auth} showSnackbar={showSnackbar} /> :
                      <Metrics />}
                     {snackbar && (
                         <div className={`alert ${snackbar.variant === 'success' ? 'alert-success' : snackbar.variant === 'warning' ? 'alert-warning' : 'alert-info'} shadow-purple position-fixed`} role="alert" style={{ bottom: '1rem', right: '1rem', zIndex: 1080 }}>
