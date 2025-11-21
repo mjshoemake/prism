@@ -1,16 +1,31 @@
 /* Purple and Black Theme - Bootstrap Compatible */
 
 :root {
-  /* Primary Purple Shades */
+
+  /* Original color scheme */
+  /*
   --bs-primary: #6f42c1;
   --bs-primary-rgb: 111, 66, 193;
   --bs-primary-dark: #5a2d9e;
   --bs-primary-light: #8b5fd6;
   --bs-primary-lighter: #a67ee5;
   --bs-primary-lightest: #c19ef0;
-  
+  */
+
+  --bs-primary: #977cc7;
+  --bs-primary-rgb: 111, 66, 193;
+  --bs-primary-dark: #5a2d9e;
+  --bs-primary-darker: #4a2c7a;
+  --bs-primary-light: #68478e;
+  --bs-primary-lighter: #7657a6;
+  --bs-primary-lightest: #b19ed1;
+
   /* Secondary Purple Shades */
+  /* Original color scheme */
+  /*
   --bs-secondary: #4a2c7a;
+  */
+  --bs-secondary: #503280;
   --bs-secondary-rgb: 74, 44, 122;
   --bs-secondary-dark: #3a225f;
   --bs-secondary-light: #6b3fa3;
