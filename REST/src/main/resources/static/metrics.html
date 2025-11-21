@@ -434,7 +434,7 @@
             );
         };
 
-        const ChangePasswordView = ({ auth, showSnackbar }) => {
+        const ChangePasswordView = ({ auth, showSnackbar, onSuccess }) => {
             const [currentPassword, setCurrentPassword] = React.useState('');
             const [newPassword, setNewPassword] = React.useState('');
             const [confirmPassword, setConfirmPassword] = React.useState('');
@@ -493,6 +493,9 @@
                     setConfirmPassword('');
                     setMsg(null);
                     showSnackbar('Password changed successfully', 'success');
+                    if (typeof onSuccess === 'function') {
+                        onSuccess();
+                    }
                 } catch (err) {
                     setMsg('Password change failed: ' + err.message);
                     setLoading(false);
@@ -596,7 +599,7 @@
                 <>
                     {view === Views.Login ? <LoginView onLogin={(u)=>{ setAuth(u); setView(Views.Metrics); showSnackbar('Welcome!', 'success'); }} /> :
                      view === Views.Users ? <UsersView showSnackbar={showSnackbar} /> :
-                     view === Views.ChangePassword ? <ChangePasswordView auth={auth} showSnackbar={showSnackbar} /> :
+                     view === Views.ChangePassword ? <ChangePasswordView auth={auth} showSnackbar={showSnackbar} onSuccess={() => setView(Views.Metrics)} /> :
                      <Metrics />}
                     {snackbar && (
                         <div className={`alert ${snackbar.variant === 'success' ? 'alert-success' : snackbar.variant === 'warning' ? 'alert-warning' : 'alert-info'} shadow-purple position-fixed`} role="alert" style={{ bottom: '1rem', right: '1rem', zIndex: 1080 }}>
@@ -610,6 +613,8 @@
         const root = ReactDOM.createRoot(document.getElementById('app'));
         root.render(<App />);
     </script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 

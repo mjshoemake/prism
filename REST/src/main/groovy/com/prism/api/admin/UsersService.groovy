@@ -3,6 +3,7 @@ package com.prism.api.admin
 import org.springframework.dao.EmptyResultDataAccessException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
+import org.postgresql.util.PGobject
 import com.prism.api.common.utils.SecurityUtils
 
 @Service
@@ -28,6 +29,13 @@ class UsersService {
         }
     }
 
+    private PGobject toJsonb(String value) {
+        def jsonb = new PGobject()
+        jsonb.setType('jsonb')
+        jsonb.setValue(value)
+        return jsonb
+    }
+
     Map<String, Object> createUser(Long enterprisePk, String email, String username) {
         // Fetch enterprise temp password hash
         def eph = jdbcTemplate.queryForObject('SELECT temp_password_hash FROM "prism"."enterprises" WHERE enterprise_pk = ?', String, enterprisePk)
@@ -35,7 +43,7 @@ class UsersService {
             throw new IllegalStateException('Enterprise has no temp password configured')
         }
         String algo = 'bcrypt'
-        def paramsJson = '{"cost":12}'
+        def paramsJson = toJsonb('{"cost":12}')
         def sql = '''
             INSERT INTO "prism"."Users" (enterprise_pk, email, username, password_hash, password_algo, password_params, is_temp_password)
             VALUES (?, ?, ?, ?, ?, ?, TRUE)
@@ -49,12 +57,20 @@ class UsersService {
         jdbcTemplate.update(sql, email, username, isActive, userId)
     }
 
+    private UUID parseUserId(String userId) {
+        try {
+            return UUID.fromString(userId)
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException('Invalid user ID format', e)
+        }
+    }
+
     int updatePassword(String userId, String rawPassword) {
         String algo = 'bcrypt'
         String hash = SecurityUtils.encryptPassword(rawPassword);
-        def paramsJson = '{"cost":12}'
+        def paramsJson = toJsonb('{"cost":12}')
         def sql = 'UPDATE "prism"."Users" SET password_hash = ?, password_algo = ?, password_params = ?, password_updated_at = now(), is_temp_password = FALSE WHERE user_id = ?'
-        jdbcTemplate.update(sql, hash, algo, paramsJson, userId)
+        jdbcTemplate.update(sql, hash, algo, paramsJson, parseUserId(userId))
     }
 
     int deleteUser(String userId) {
@@ -125,7 +141,8 @@ class UsersService {
         // First verify current password
         def sql = 'SELECT password_hash FROM "prism"."Users" WHERE user_id = ? AND is_active = TRUE'
         try {
-            def currentHash = jdbcTemplate.queryForObject(sql, String.class, userId)
+            UUID uuid = parseUserId(userId)
+            def currentHash = jdbcTemplate.queryForObject(sql, String.class, uuid)
             
             if (!SecurityUtils.verifyPassword(currentPassword, currentHash)) {
                 return [success: false, message: 'Current password is incorrect.']
@@ -135,6 +152,8 @@ class UsersService {
             updatePassword(userId, newPassword)
             return [success: true, message: 'Password changed successfully.']
             
+        } catch (IllegalArgumentException e) {
+            return [success: false, message: 'Invalid user identifier.']
         } catch (org.springframework.dao.EmptyResultDataAccessException e) {
             return [success: false, message: 'User not found.']
         }
