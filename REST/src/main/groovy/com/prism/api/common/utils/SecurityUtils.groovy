@@ -9,7 +9,15 @@ class SecurityUtils {
     }
 
     static boolean verifyPassword(String rawPassword, String hashedPassword) {
-        return BCrypt.checkpw(rawPassword, hashedPassword)
+        println "SecurityUtils(rawPassword: '" + rawPassword + "', hashedPassword: '" + hashedPassword + "') called."
+        if (!rawPassword || !hashedPassword) {
+            return false
+        }
+        try {
+            return BCrypt.checkpw(rawPassword, hashedPassword)
+        } catch (Exception e) {
+            return false
+        }
     }
 
 }

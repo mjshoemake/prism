@@ -21,18 +21,23 @@ class AuthController {
 
     @PostMapping('/login')
     ResponseEntity<Map<String, Object>> login(@RequestBody LoginRequest request) {
+        println "AuthController.login() called."
         if (!request?.email || !request?.password) {
+            println "AuthController.login() called.   Email: '${request?.email}' Password: '${request?.password}'"
             return ResponseEntity.badRequest().body([
                 success: false, 
                 message: 'Email and password are required.'
             ])
         }
 
+        println "AuthController.login() Calling UsersService.authenticateUser()..."
         def result = usersService.authenticateUser(request.email, request.password)
         
         if (result.success) {
+            println "AuthController.login() Calling UsersService.authenticateUser()...  SUCCESS"
             return ResponseEntity.ok(result)
         } else {
+            println "AuthController.login() Calling UsersService.authenticateUser()...  FAILURE"
             return ResponseEntity.status(401).body(result)
         }
     }
@@ -70,3 +75,8 @@ class AuthController {
         }
     }
 }
+
+
+
+
+

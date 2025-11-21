@@ -15,12 +15,12 @@ class UsersService {
     }
 
     List<Map<String, Object>> listUsers() {
-        def sql = 'SELECT user_id, enterprise_pk, email, username, is_active, is_temp_password, failed_login_count, locked_until, last_login_at, created_at, updated_at FROM "prism"."users" ORDER BY created_at DESC'
+        def sql = 'SELECT user_id, enterprise_pk, email, username, is_active, is_temp_password, failed_login_count, locked_until, last_login_at, created_at, updated_at FROM "prism"."Users" ORDER BY created_at DESC'
         jdbcTemplate.queryForList(sql)
     }
 
     Map<String, Object> getUser(String userId) {
-        def sql = 'SELECT user_id, enterprise_pk, email, username, is_active, is_temp_password, failed_login_count, locked_until, last_login_at, created_at, updated_at FROM "prism"."users" WHERE user_id = ?'
+        def sql = 'SELECT user_id, enterprise_pk, email, username, is_active, is_temp_password, failed_login_count, locked_until, last_login_at, created_at, updated_at FROM "prism"."Users" WHERE user_id = ?'
         try {
             jdbcTemplate.queryForMap(sql, userId)
         } catch (EmptyResultDataAccessException e) {
@@ -37,7 +37,7 @@ class UsersService {
         String algo = 'bcrypt'
         def paramsJson = '{"cost":12}'
         def sql = '''
-            INSERT INTO "prism"."users" (enterprise_pk, email, username, password_hash, password_algo, password_params, is_temp_password)
+            INSERT INTO "prism"."Users" (enterprise_pk, email, username, password_hash, password_algo, password_params, is_temp_password)
             VALUES (?, ?, ?, ?, ?, ?, TRUE)
             RETURNING user_id, enterprise_pk, email, username, is_active, is_temp_password, created_at, updated_at
         '''
@@ -45,7 +45,7 @@ class UsersService {
     }
 
     int updateUser(String userId, String email, String username, Boolean isActive) {
-        def sql = 'UPDATE "prism"."users" SET email = ?, username = ?, is_active = COALESCE(?, is_active) WHERE user_id = ?'
+        def sql = 'UPDATE "prism"."Users" SET email = ?, username = ?, is_active = COALESCE(?, is_active) WHERE user_id = ?'
         jdbcTemplate.update(sql, email, username, isActive, userId)
     }
 
@@ -53,20 +53,21 @@ class UsersService {
         String algo = 'bcrypt'
         String hash = SecurityUtils.encryptPassword(rawPassword);
         def paramsJson = '{"cost":12}'
-        def sql = 'UPDATE "prism"."users" SET password_hash = ?, password_algo = ?, password_params = ?, password_updated_at = now(), is_temp_password = FALSE WHERE user_id = ?'
+        def sql = 'UPDATE "prism"."Users" SET password_hash = ?, password_algo = ?, password_params = ?, password_updated_at = now(), is_temp_password = FALSE WHERE user_id = ?'
         jdbcTemplate.update(sql, hash, algo, paramsJson, userId)
     }
 
     int deleteUser(String userId) {
-        def sql = 'DELETE FROM "prism"."users" WHERE user_id = ?'
+        def sql = 'DELETE FROM "prism"."Users" WHERE user_id = ?'
         jdbcTemplate.update(sql, userId)
     }
 
     Map<String, Object> authenticateUser(String email, String password) {
+        println "UserService.authenticateUser(email: '" + email + "', password: '" + password + "') called."
         def sql = '''
             SELECT user_id, enterprise_pk, email, username, password_hash, password_algo, 
                    is_active, is_temp_password, failed_login_count, locked_until, last_login_at 
-            FROM "prism"."users" 
+            FROM "prism"."Users" 
             WHERE email = ? AND is_active = TRUE
         '''
         try {
@@ -77,11 +78,17 @@ class UsersService {
                 return [success: false, message: 'Account is temporarily locked. Please try again later.']
             }
             
+            // Check if password hash exists
+            if (!user.password_hash) {
+                incrementFailedLoginCount(user.user_id.toString())
+                return [success: false, message: 'Invalid email or password.']
+            }
+            
             // Verify password
             if (SecurityUtils.verifyPassword(password, user.password_hash)) {
                 // Reset failed login count and update last login
                 def updateSql = '''
-                    UPDATE "prism"."users" 
+                    UPDATE "prism"."Users" 
                     SET failed_login_count = 0, last_login_at = now() 
                     WHERE user_id = ?
                 '''
@@ -93,7 +100,7 @@ class UsersService {
                 return [success: true, user: user]
             } else {
                 // Increment failed login count
-                incrementFailedLoginCount(user.user_id)
+                incrementFailedLoginCount(user.user_id.toString())
                 return [success: false, message: 'Invalid email or password.']
             }
         } catch (org.springframework.dao.EmptyResultDataAccessException e) {
@@ -103,7 +110,7 @@ class UsersService {
 
     private void incrementFailedLoginCount(String userId) {
         def sql = '''
-            UPDATE "prism"."users" 
+            UPDATE "prism"."Users" 
             SET failed_login_count = failed_login_count + 1,
                 locked_until = CASE 
                     WHEN failed_login_count + 1 >= 5 THEN now() + INTERVAL '15 minutes'
@@ -111,12 +118,12 @@ class UsersService {
                 END
             WHERE user_id = ?
         '''
-        jdbcTemplate.update(sql, userId)
+        jdbcTemplate.update(sql, UUID.fromString(userId))
     }
 
     Map<String, Object> changePassword(String userId, String currentPassword, String newPassword) {
         // First verify current password
-        def sql = 'SELECT password_hash FROM "prism"."users" WHERE user_id = ? AND is_active = TRUE'
+        def sql = 'SELECT password_hash FROM "prism"."Users" WHERE user_id = ? AND is_active = TRUE'
         try {
             def currentHash = jdbcTemplate.queryForObject(sql, String.class, userId)
             

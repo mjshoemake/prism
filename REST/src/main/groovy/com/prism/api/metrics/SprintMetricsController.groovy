@@ -21,6 +21,7 @@ class SprintMetricsController {
     ResponseEntity<List<Map<String, Object>>> getSprintMetrics(
         @RequestBody SprintMetricsRequest request
     ) {
+        println "SprintMetricsController.getSprintMetrics() called."
         if (! request.focusLevelColumn) {
             throw new ResourceNotFoundException("FocusLevelColumn not specified.")
         }
@@ -43,6 +44,7 @@ class SprintMetricsController {
     //@CrossOrigin(origins = "*")
     @GetMapping("/focus-areas-list")
     ResponseEntity<List<Map<String, Object>>> getFocusAreasList() {
+        println "SprintMetricsController.getFocusAreasList() called."
         List<Map<String, Object>> rows = svc.fetchFocusAreas()
         return ResponseEntity.ok(rows)
     }
@@ -52,6 +54,7 @@ class SprintMetricsController {
     ResponseEntity<List<Map<String, Object>>> getFocusLevelsList(
             @PathVariable String focusAreaPK
     ) {
+        println "SprintMetricsController.getFocusLevelsList() called."
         if (! focusAreaPK) {
             throw new ParameterValueRequiredException("Required parameter Focus-Area-ID is empty.")
         }
