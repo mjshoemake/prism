@@ -171,13 +171,13 @@
                             <div className="mb-3">
                                 <label className="form-label">Focus Area</label>
                                 <select className="form-select form-select-sm" value={selectedFocusArea?.focus_area_pk || ''} onChange={handleFocusAreaChange} disabled={loading}>
-                                    {focusAreas.map(a => <option key={a.focus_area_pk} value={a.focus_area_pk}>{a.name}</option>)}
+                                    {focusAreas.map(a => <option className="picklist-item" key={a.focus_area_pk} value={a.focus_area_pk}>{a.name}</option>)}
                                 </select>
                             </div>
                             <div className="mb-2">
                                 <label className="form-label">Focus Level</label>
                                 <select className="form-select form-select-sm" value={selectedFocusLevel?.column_name || ''} onChange={handleFocusLevelChange} disabled={loading || !selectedFocusLevel}>
-                                    {focusLevels.map(l => <option key={l.column_name} value={l.column_name}>{l.name}</option>)}
+                                    {focusLevels.map(l => <option className="picklist-item" key={l.column_name} value={l.column_name}>{l.name}</option>)}
                                 </select>
                             </div>
                             <div className="spacer"></div>
