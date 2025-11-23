@@ -61,7 +61,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        const purpleTheme = { primary: '#6f42c1', primaryDark: '#5a2d9e', primaryLight: '#8b5fd6', accent: '#8e44ad', textLight: '#e6d9f2', textMuted: '#b8a9d9', white: '#ffffff' };
+        const purpleTheme = { primary: '#977cc7', primaryDark: '#5a2d9e', primaryDarker: '#4a2c7a', primaryLight: '#68478e', primaryLighter: '#7657a6', primaryLightest: '#b19ed1', secondary: '#503280', accent: '#8e44ad', textLight: '#e6d9f2', textMuted: '#b8a9d9', white: '#ffffff' };
 
         // Simple SPA shell with auth + view routing
         const Views = {
@@ -144,9 +144,10 @@
                 const ctx = chartRef.current.getContext('2d');
                 chartInstanceRef.current = new Chart(ctx, {
                     type: 'bar',
-                    data: { labels, datasets: [{ label: 'Say/Do Ratio (%)', data: values, backgroundColor: purpleTheme.primary, borderColor: purpleTheme.primaryDark, borderWidth: 1 }] },
+                    data: { labels, datasets: [{ label: 'Say/Do Ratio (%)', data: values, backgroundColor: purpleTheme.primaryLighter, borderColor: purpleTheme.primaryDark, borderWidth: 1, hoverBackgroundColor: purpleTheme.primaryLightest, hoverBorderColor: purpleTheme.primaryLightest }] },
                     options: {
                         responsive: true, maintainAspectRatio: false,
+                        animation: false,
                         plugins: { legend: { labels: { color: purpleTheme.white, font: { size: 12 } } }, tooltip: { callbacks: { afterBody: (items) => items?.length ? `Filter on: ${selectedFocusLevel?.name} = ${items[0].label}` : '' } } },
                         scales: { y: { beginAtZero: true, max: 100, ticks: { color: purpleTheme.textMuted, callback: v => v + '%' }, grid: { color: purpleTheme.secondary } }, x: { ticks: { color: purpleTheme.textMuted }, grid: { color: purpleTheme.secondary } } }
                     }
@@ -160,8 +161,8 @@
                 };
             };
 
-            const handleFocusAreaChange = (e) => { const pk = parseInt(e.target.value); const sel = focusAreas.find(a => a.focus_area_pk === pk); setSelectedFocusArea(sel); setSelectedFocusLevel(null); setChartData([]); };
-            const handleFocusLevelChange = (e) => { const col = e.target.value; const sel = focusLevels.find(l => l.column_name === col); setSelectedFocusLevel(sel); if (selectedFocusArea && sel) setFocusLevelCache(prev => ({ ...prev, [selectedFocusArea.focus_area_pk]: sel.column_name })); };
+            const handleFocusAreaChange = (focusArea) => { setSelectedFocusArea(focusArea); setSelectedFocusLevel(null); setChartData([]); };
+            const handleFocusLevelChange = (focusLevel) => { setSelectedFocusLevel(focusLevel); if (selectedFocusArea && focusLevel) setFocusLevelCache(prev => ({ ...prev, [selectedFocusArea.focus_area_pk]: focusLevel.column_name })); };
 
             return (
                 <div className="w-100 d-flex">
@@ -170,15 +171,39 @@
                             <div className="section-title">Selections</div>
                             <div className="mb-3">
                                 <label className="form-label">Focus Area</label>
-                                <select className="form-select form-select-sm" value={selectedFocusArea?.focus_area_pk || ''} onChange={handleFocusAreaChange} disabled={loading}>
-                                    {focusAreas.map(a => <option className="picklist-item" key={a.focus_area_pk} value={a.focus_area_pk}>{a.name}</option>)}
-                                </select>
+                                <div className="dropdown">
+                                    <button className="btn btn-outline-secondary form-select-sm w-100 text-start d-flex justify-content-between align-items-center" type="button" id="focusAreaDropdown" data-bs-toggle="dropdown" aria-expanded="false" disabled={loading}>
+                                        <span>{selectedFocusArea?.name || 'Select Focus Area'}</span>
+                                        <i className="fas fa-chevron-down ms-auto"></i>
+                                    </button>
+                                    <ul className="dropdown-menu w-100" aria-labelledby="focusAreaDropdown">
+                                        {focusAreas.map(a => (
+                                            <li key={a.focus_area_pk}>
+                                                <a className={`dropdown-item ${selectedFocusArea?.focus_area_pk === a.focus_area_pk ? 'active' : ''}`} href="#" onClick={(e) => { e.preventDefault(); handleFocusAreaChange(a); }}>
+                                                    {a.name}
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             </div>
                             <div className="mb-2">
                                 <label className="form-label">Focus Level</label>
-                                <select className="form-select form-select-sm" value={selectedFocusLevel?.column_name || ''} onChange={handleFocusLevelChange} disabled={loading || !selectedFocusLevel}>
-                                    {focusLevels.map(l => <option className="picklist-item" key={l.column_name} value={l.column_name}>{l.name}</option>)}
-                                </select>
+                                <div className="dropdown">
+                                    <button className="btn btn-outline-secondary form-select-sm w-100 text-start d-flex justify-content-between align-items-center" type="button" id="focusLevelDropdown" data-bs-toggle="dropdown" aria-expanded="false" disabled={loading || !selectedFocusLevel}>
+                                        <span>{selectedFocusLevel?.name || 'Select Focus Level'}</span>
+                                        <i className="fas fa-chevron-down ms-auto"></i>
+                                    </button>
+                                    <ul className="dropdown-menu w-100" aria-labelledby="focusLevelDropdown">
+                                        {focusLevels.map(l => (
+                                            <li key={l.column_name}>
+                                                <a className={`dropdown-item ${selectedFocusLevel?.column_name === l.column_name ? 'active' : ''}`} href="#" onClick={(e) => { e.preventDefault(); handleFocusLevelChange(l); }}>
+                                                    {l.name}
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             </div>
                             <div className="spacer"></div>
                             <div className="section-title">Active Filters</div>
