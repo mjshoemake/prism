@@ -102,6 +102,22 @@ BEGIN
   END IF;
 END$$;
 
+INSERT INTO "prism"."Enterprises" (enterprise_pk,
+                                   "name",
+								   url,
+								   auth_token,
+								   temp_password_hash,
+								   created_at,
+								   updated_at
+)
+VALUES (1,
+        'Default',
+		'<url>',
+		'<auth_token>',
+		'<temp_password_hash>',
+		now(),
+		now());
+
 INSERT INTO "prism"."Users" (enterprise_pk,
                              email,
                              username,
