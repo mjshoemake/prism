@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Prism logging configuration (Logback, the backend behind SLF4J in Spring Boot).
+
+  * Categories are defined in com.prism.common.logging.LogCategory:
+      Application, Controller, Service, SQL, Audit, Performance
+  * VERBOSITY of each category is set in application.properties, e.g.
+      logging.level.SQL=DEBUG
+    and can be overridden on the command line (see application.properties).
+  * DESTINATIONS are set here: everything goes to the console; Audit and Performance are
+    additionally written to their own daily-rolling files in ${LOG_DIR} (prism.logging.dir).
+-->
+<configuration>
+
+    <springProperty scope="context" name="LOG_DIR" source="prism.logging.dir" defaultValue="logs"/>
+
+    <property name="CONSOLE_PATTERN"
+              value="[%d{MM-dd-yyyy HH:mm:ss-SSS}] %-15.15thread %-32logger{32} %-5level - %msg%n"/>
+    <!-- Line breaks in audit messages are flattened so a crafted value (e.g. an email) can't forge entries. -->
+    <property name="AUDIT_PATTERN" value="[%d{MM-dd-yyyy HH:mm:ss}] %thread - %replace(%msg){'[\r\n]+', ' '}%n"/>
+    <property name="PERF_PATTERN" value="[%d{MM-dd-yyyy HH:mm:ss-SSS}] %thread - %msg%n"/>
+
+    <!-- ===== Appenders (destinations) ===================================================== -->
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/audit.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- Rolls daily; yyyy-MM-dd keeps rolled files sorted by name. -->
+            <fileNamePattern>${LOG_DIR}/audit.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>90</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${AUDIT_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="PERF_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/perf.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/perf.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${PERF_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ===== Categories with their own files (additivity off = not duplicated via root) ===== -->
+
+    <logger name="Audit" additivity="false">
+        <appender-ref ref="AUDIT_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <logger name="Performance" additivity="false">
+        <appender-ref ref="PERF_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- All other categories (Application, Controller, Service, SQL) and third-party libraries
+         inherit the root's console appender. -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+</configuration>

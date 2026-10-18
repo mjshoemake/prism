@@ -4,15 +4,17 @@ import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import com.prism.common.logging.LogCategory;
+import com.prism.common.logging.PerformanceLog;
+
 @Service
 public class SprintMetricsService {
 
-    private static final Logger log = LoggerFactory.getLogger(SprintMetricsService.class);
+    private static final Logger sqlLog = LogCategory.SQL.logger(SprintMetricsService.class);
 
     private static final String METRICS_SQL = """
             SELECT %1$s%2$s
@@ -54,13 +56,13 @@ public class SprintMetricsService {
                 ? ", " + valueColumnsForSelectClause
                 : "";
         var sql = METRICS_SQL.formatted(focusLevelColumn, valueColumns, whereClause);
-        log.debug("SQL: {}", sql);
-        return jdbcTemplate.queryForList(sql);
+        sqlLog.debug("SQL: {}", sql);
+        return PerformanceLog.time("fetchMetrics", () -> jdbcTemplate.queryForList(sql));
     }
 
     public List<Map<String, Object>> fetchFocusAreas() {
-        log.debug("SQL: {}", FOCUS_AREAS_SQL);
-        return jdbcTemplate.queryForList(FOCUS_AREAS_SQL);
+        sqlLog.debug("SQL: {}", FOCUS_AREAS_SQL);
+        return PerformanceLog.time("fetchFocusAreas", () -> jdbcTemplate.queryForList(FOCUS_AREAS_SQL));
     }
 
     /**
@@ -69,7 +71,7 @@ public class SprintMetricsService {
      */
     public List<Map<String, Object>> fetchFocusLevels(String focusAreaPK) {
         var sql = FOCUS_LEVELS_SQL.formatted(focusAreaPK);
-        log.debug("SQL: {}", sql);
-        return jdbcTemplate.queryForList(sql);
+        sqlLog.debug("SQL: {}", sql);
+        return PerformanceLog.time("fetchFocusLevels", () -> jdbcTemplate.queryForList(sql));
     }
 }

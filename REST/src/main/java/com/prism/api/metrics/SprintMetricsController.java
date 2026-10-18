@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,12 +15,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.prism.common.exceptions.ParameterValueRequiredException;
 import com.prism.common.exceptions.ResourceNotFoundException;
+import com.prism.common.logging.LogCategory;
 
 @RestController
 @RequestMapping("/api/metrics")
 public class SprintMetricsController {
 
-    private static final Logger log = LoggerFactory.getLogger(SprintMetricsController.class);
+    private static final Logger log = LogCategory.CONTROLLER.logger(SprintMetricsController.class);
 
     private final SprintMetricsService svc;
 
