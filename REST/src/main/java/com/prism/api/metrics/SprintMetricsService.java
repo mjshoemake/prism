@@ -32,12 +32,14 @@ public class SprintMetricsService {
     private static final String FOCUS_AREAS_SQL = """
             SELECT focus_area_pk, name
             FROM "prism"."Focus_Areas" fa
+            ORDER BY fa.sort_order, fa.focus_area_pk
             """;
 
     private static final String FOCUS_LEVELS_SQL = """
             SELECT focus_area_pk, name, column_name
             FROM "prism"."Focus_Levels" fl
-            WHERE focus_area_pk = %s
+            WHERE fl.focus_area_pk = ?
+            ORDER BY fl.sort_order, fl.focus_level_pk
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -75,14 +77,13 @@ public class SprintMetricsService {
     }
 
     /**
-     * TODO: focusAreaPK is interpolated into the SQL text (SQL injection risk), as in the original Groovy.
-     * Switch to a bound parameter once the column type of Focus_Levels.focus_area_pk is confirmed.
+     * Focus levels of one focus area, in drill-down order (sort_order, see SQL/009).
      */
-    public List<Map<String, Object>> fetchFocusLevels(String focusAreaPK) {
+    public List<Map<String, Object>> fetchFocusLevels(int focusAreaPk) {
         log.debug("Started");
-        var sql = FOCUS_LEVELS_SQL.formatted(focusAreaPK);
-        sqlLog.debug("SQL: {}", sql);
-        List<Map<String, Object>> result = PerformanceLog.time("fetchFocusLevels", () -> jdbcTemplate.queryForList(sql));
+        sqlLog.debug("SQL: {} [focusAreaPk={}]", FOCUS_LEVELS_SQL, focusAreaPk);
+        List<Map<String, Object>> result = PerformanceLog.time("fetchFocusLevels",
+                () -> jdbcTemplate.queryForList(FOCUS_LEVELS_SQL, focusAreaPk));
         resultSetLog.debug("Focus Levels: size={}", result.size());
         LogUtils.debug(resultSetLog, result, "   ", true);
         return result;

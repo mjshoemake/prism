@@ -40,7 +40,7 @@ public class UsersService {
             "SELECT %s FROM \"prism\".\"Users\" WHERE user_id = ?".formatted(USER_COLUMNS);
 
     private static final String ENTERPRISE_TEMP_HASH_SQL = """
-            SELECT temp_password_hash FROM "prism"."enterprises" WHERE enterprise_pk = ?""";
+            SELECT temp_password_hash FROM "prism"."Enterprises" WHERE enterprise_pk = ?""";
 
     private static final String INSERT_USER_SQL = """
             INSERT INTO "prism"."Users" (enterprise_pk, email, username, password_hash, password_algo, password_params, is_temp_password)
@@ -97,13 +97,14 @@ public class UsersService {
         return jdbcTemplate.queryForList(LIST_USERS_SQL);
     }
 
-    // NOTE: getUser, updateUser and deleteUser bind userId as a String (as the Groovy code did), while
-    // updatePassword/changePassword bind a UUID. If user_id is a uuid column, the String-bound queries
-    // will fail in Postgres; to be confirmed once the DB is available.
+    /** User by ID; empty if the ID is not a valid UUID or no such user exists. */
     public Optional<Map<String, Object>> getUser(String userId) {
         log.debug("Started");
+        if (!isValidUserId(userId)) {
+            return Optional.empty();
+        }
         try {
-            return Optional.of(jdbcTemplate.queryForMap(GET_USER_SQL, userId));
+            return Optional.of(jdbcTemplate.queryForMap(GET_USER_SQL, parseUserId(userId)));
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
@@ -124,7 +125,7 @@ public class UsersService {
 
     public int updateUser(String userId, String email, String username, Boolean isActive) {
         log.debug("Started");
-        int rows = jdbcTemplate.update(UPDATE_USER_SQL, email, username, isActive, userId);
+        int rows = jdbcTemplate.update(UPDATE_USER_SQL, email, username, isActive, parseUserId(userId));
         audit.info("USER_UPDATED userId={} email={} isActive={} rows={}", userId, email, isActive, rows);
         return rows;
     }
@@ -139,7 +140,7 @@ public class UsersService {
 
     public int deleteUser(String userId) {
         log.debug("Started");
-        int rows = jdbcTemplate.update(DELETE_USER_SQL, userId);
+        int rows = jdbcTemplate.update(DELETE_USER_SQL, parseUserId(userId));
         audit.info("USER_DELETED userId={} rows={}", userId, rows);
         return rows;
     }
@@ -209,6 +210,17 @@ public class UsersService {
     private void incrementFailedLoginCount(String userId) {
         log.debug("Started");
         jdbcTemplate.update(INCREMENT_FAILED_LOGIN_SQL, UUID.fromString(userId));
+    }
+
+    /** True if the ID is a well-formed UUID (user_id is a UUID column). */
+    public static boolean isValidUserId(String userId) {
+        log.debug("Started");
+        try {
+            UUID.fromString(userId);
+            return true;
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return false;
+        }
     }
 
     private static UUID parseUserId(String userId) {

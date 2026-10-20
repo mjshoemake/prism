@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.prism.common.exceptions.ParameterValueRequiredException;
 import com.prism.common.exceptions.ResourceNotFoundException;
 import com.prism.common.logging.LogCategory;
 import com.prism.common.logging.PerformanceLog;
@@ -62,13 +61,10 @@ public class SprintMetricsController {
     }
 
     @GetMapping("/focus-levels-list/{focusAreaPK}")
-    public ResponseEntity<List<Map<String, Object>>> getFocusLevelsList(@PathVariable String focusAreaPK) {
+    public ResponseEntity<List<Map<String, Object>>> getFocusLevelsList(@PathVariable int focusAreaPK) {
         log.debug("Started");
-        return PerformanceLog.time("SprintMetricsController.getFocusLevelsList", () -> {
-            if (!StringUtils.hasLength(focusAreaPK)) {
-                throw new ParameterValueRequiredException("Required parameter Focus-Area-ID is empty.");
-            }
-            return ResponseEntity.ok(svc.fetchFocusLevels(focusAreaPK));
-        });
+        // focusAreaPK is bound as an int: a non-numeric value is rejected by Spring with 400 Bad Request.
+        return PerformanceLog.time("SprintMetricsController.getFocusLevelsList",
+                () -> ResponseEntity.ok(svc.fetchFocusLevels(focusAreaPK)));
     }
 }

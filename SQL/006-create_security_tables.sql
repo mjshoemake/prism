@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS "prism"."Enterprises" (
 );
 
 -- Optional: basic URL sanity (kept idempotent since it's inline). Comment/uncomment as needed.
--- ALTER TABLE "prism"."enterprises"
+-- ALTER TABLE "prism"."Enterprises"
 --   ADD CONSTRAINT enterprises_url_http_check CHECK (url ~* '^https?://')
 --   NOT VALID;
 -- -- NOTE: If you add the above later, run: VALIDATE CONSTRAINT enterprises_url_http_check;
@@ -47,7 +47,7 @@ BEGIN
     WHERE tgname = 'enterprises_set_updated_at'
       AND tgrelid = '"prism"."Enterprises"'::regclass
   ) THEN
-    DROP TRIGGER enterprises_set_updated_at ON "prism"."enterprises";
+    DROP TRIGGER enterprises_set_updated_at ON "prism"."Enterprises";
   END IF;
 
   CREATE TRIGGER enterprises_set_updated_at

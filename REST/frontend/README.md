@@ -1,5 +1,8 @@
 # Prism Web (frontend)
 
+> **New to the codebase?** Read the [UI developer guide](docs/DEVELOPER_GUIDE.md) (how it works, adding pages,
+> security) and the [product overview](../docs/OVERVIEW.md). This README is the quick reference.
+
 React + TypeScript single-page app for Prism, built with [Vite](https://vite.dev).
 Styling is Bootstrap 5 with the purple/black theme; charts use Chart.js via `react-chartjs-2`.
 
@@ -99,6 +102,5 @@ Add a `MetricDefinition` to `features/metrics/metricDefinitions.ts` (SQL alias `
 ## Known issues / TODO
 
 - The client sends SQL fragments (`selectSql`, WHERE clause) to the API — see backlog in `REST/CLAUDE.md`.
-- Filters are not cleared when switching focus area (same as the original app).
 - Users page uses `window.confirm` / `window.prompt`; replace with Bootstrap modals.
 - No real authentication: the session is just the stored login response.

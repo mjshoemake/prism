@@ -15,6 +15,11 @@ public final class PerformanceLog {
 
     private static final Logger perf = LogCategory.PERFORMANCE.logger();
 
+    static {
+        // Console %method then shows the timed method (e.g. createUser) instead of "time".
+        LogFrames.skip(PerformanceLog.class);
+    }
+
     private PerformanceLog() {
     }
 

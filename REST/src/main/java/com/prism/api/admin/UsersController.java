@@ -72,6 +72,9 @@ public class UsersController {
     public ResponseEntity<Void> updateUser(@PathVariable String userId, @RequestBody UpdateUserRequest req) {
         log.debug("Started");
         return PerformanceLog.time("UsersController.updateUser", () -> {
+            if (!UsersService.isValidUserId(userId)) {
+                return ResponseEntity.badRequest().build();
+            }
             svc.updateUser(userId, req.email(), req.username(), req.isActive());
             return ResponseEntity.noContent().build();
         });
@@ -81,6 +84,9 @@ public class UsersController {
     public ResponseEntity<Void> updatePassword(@PathVariable String userId, @RequestBody UpdatePasswordRequest req) {
         log.debug("Started");
         return PerformanceLog.time("UsersController.updatePassword", () -> {
+            if (!UsersService.isValidUserId(userId)) {
+                return ResponseEntity.badRequest().build();
+            }
             if (!StringUtils.hasLength(req.password())) {
                 return ResponseEntity.badRequest().build();
             }
@@ -93,6 +99,9 @@ public class UsersController {
     public ResponseEntity<Void> resetPassword(@PathVariable String userId, @RequestBody ResetPasswordRequest req) {
         log.debug("Started");
         return PerformanceLog.time("UsersController.resetPassword", () -> {
+            if (!UsersService.isValidUserId(userId)) {
+                return ResponseEntity.badRequest().build();
+            }
             if (!StringUtils.hasLength(req.newPassword())) {
                 return ResponseEntity.badRequest().build();
             }
@@ -105,6 +114,9 @@ public class UsersController {
     public ResponseEntity<Void> deleteUser(@PathVariable String userId) {
         log.debug("Started");
         return PerformanceLog.time("UsersController.deleteUser", () -> {
+            if (!UsersService.isValidUserId(userId)) {
+                return ResponseEntity.badRequest().build();
+            }
             svc.deleteUser(userId);
             return ResponseEntity.noContent().build();
         });
