@@ -1,56 +1,44 @@
 import type { User } from '../../../api/types';
-import type { UserEdits } from '../useUsers';
+import { formatDateTime } from '../format';
+import { displayName } from '../userList';
 
 interface UserRowProps {
   user: User;
-  onEdit: (edits: UserEdits) => void;
-  onSave: () => void;
-  onSetPassword: () => void;
-  onDelete: () => void;
+  isSelf: boolean;
+  onSelect: () => void;
 }
 
-export function UserRow({ user, onEdit, onSave, onSetPassword, onDelete }: UserRowProps) {
+/** Read-only row; clicking it (or its Edit button) opens the Edit User modal. */
+export function UserRow({ user, isSelf, onSelect }: UserRowProps) {
   return (
-    <tr>
+    <tr className={`user-row ${user.is_active ? '' : 'user-row--inactive'}`} onClick={onSelect}>
       <td>
-        <input
-          className="form-control form-control-sm"
-          aria-label="Email"
-          value={user.email ?? ''}
-          onChange={(e) => onEdit({ email: e.target.value })}
-        />
+        {displayName(user)}
+        {isSelf && <span className="badge text-bg-secondary ms-2">You</span>}
       </td>
+      <td>{user.email}</td>
       <td>
-        <input
-          className="form-control form-control-sm"
-          aria-label="Username"
-          value={user.username ?? ''}
-          onChange={(e) => onEdit({ username: e.target.value })}
-        />
+        {user.is_active ? (
+          <span className="badge text-bg-success">Active</span>
+        ) : (
+          <span className="badge text-bg-secondary">Deactivated</span>
+        )}
+        {user.is_temp_password && <span className="badge text-bg-warning ms-1">Temp password</span>}
       </td>
-      <td>{user.enterprise_pk}</td>
-      <td>
-        <input
-          type="checkbox"
-          className="form-check-input"
-          aria-label="Active"
-          checked={!!user.is_active}
-          onChange={(e) => onEdit({ is_active: e.target.checked })}
-        />
-      </td>
-      <td>{user.is_temp_password ? 'Yes' : 'No'}</td>
+      <td>{formatDateTime(user.last_login_at)}</td>
+      <td>{formatDateTime(user.created_at)}</td>
       <td className="text-end">
-        <div className="btn-group">
-          <button type="button" className="btn btn-sm btn-outline-primary" onClick={onSave}>
-            Save
-          </button>
-          <button type="button" className="btn btn-sm btn-outline-warning" onClick={onSetPassword}>
-            Set Password
-          </button>
-          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onDelete}>
-            Delete
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-secondary"
+          aria-label={`Edit ${displayName(user)}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+          }}
+        >
+          <i className="fas fa-pen" aria-hidden="true" />
+        </button>
       </td>
     </tr>
   );

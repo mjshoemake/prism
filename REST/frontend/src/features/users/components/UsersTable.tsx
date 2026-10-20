@@ -1,63 +1,63 @@
 import type { User } from '../../../api/types';
-import { ErrorAlert } from '../../../components/ErrorAlert';
-import { LoadingSpinner } from '../../../components/LoadingSpinner';
-import type { UserEdits } from '../useUsers';
+import type { SortKey, SortState } from '../userList';
 import { UserRow } from './UserRow';
 
 interface UsersTableProps {
   users: User[];
-  loading: boolean;
-  error: string | null;
-  onRefresh: () => void;
-  onEdit: (userId: string, edits: UserEdits) => void;
-  onSave: (user: User) => void;
-  onSetPassword: (user: User) => void;
-  onDelete: (user: User) => void;
+  currentUserId: string | null;
+  sort: SortState;
+  onSort: (key: SortKey) => void;
+  onSelect: (user: User) => void;
 }
 
-export function UsersTable({ users, loading, error, onRefresh, onEdit, onSave, onSetPassword, onDelete }: UsersTableProps) {
+const COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'name', label: 'Name' },
+  { key: 'email', label: 'Email' },
+  { key: 'status', label: 'Status' },
+  { key: 'lastLogin', label: 'Last sign-in' },
+  { key: 'created', label: 'Created' },
+];
+
+export function UsersTable({ users, currentUserId, sort, onSort, onSelect }: UsersTableProps) {
   return (
-    <div className="card shadow-purple">
-      <div className="card-header d-flex justify-content-between align-items-center">
-        <h6 className="mb-0">Users</h6>
-        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onRefresh}>
-          Refresh
-        </button>
-      </div>
-      <div className="card-body">
-        {loading ? (
-          <LoadingSpinner />
-        ) : error ? (
-          <ErrorAlert message={error} />
-        ) : (
-          <div className="table-responsive">
-            <table className="table table-dark table-hover align-middle">
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>Username</th>
-                  <th>Enterprise</th>
-                  <th>Active</th>
-                  <th>Temp PW</th>
-                  <th aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <UserRow
-                    key={user.user_id}
-                    user={user}
-                    onEdit={(edits) => onEdit(user.user_id, edits)}
-                    onSave={() => onSave(user)}
-                    onSetPassword={() => onSetPassword(user)}
-                    onDelete={() => onDelete(user)}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+    <div className="table-responsive">
+      <table className="table table-dark table-hover align-middle mb-0 users-table">
+        <thead>
+          <tr>
+            {COLUMNS.map(({ key, label }) => {
+              const active = sort.key === key;
+              return (
+                <th
+                  key={key}
+                  scope="col"
+                  aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                >
+                  <button type="button" className="btn btn-link sort-header p-0" onClick={() => onSort(key)}>
+                    {label}
+                    <i
+                      className={`fas ms-1 ${active ? (sort.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort text-muted'}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </th>
+              );
+            })}
+            <th scope="col">
+              <span className="visually-hidden">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((user) => (
+            <UserRow
+              key={user.user_id}
+              user={user}
+              isSelf={user.user_id === currentUserId}
+              onSelect={() => onSelect(user)}
+            />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

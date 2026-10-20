@@ -15,7 +15,7 @@ function validate(current: string, next: string, confirm: string): string | null
 }
 
 export function ChangePasswordPage() {
-  const { userId } = useAuth();
+  const { userId, mustChangePassword, markPasswordChanged } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -47,6 +47,7 @@ export function ChangePasswordPage() {
         setLoading(false);
         return;
       }
+      markPasswordChanged();
       showToast('Password changed successfully', 'success');
       navigate('/metrics');
     } catch (err) {
@@ -62,6 +63,11 @@ export function ChangePasswordPage() {
           <h5 className="mb-0">Change Password</h5>
         </div>
         <div className="card-body">
+          {mustChangePassword && (
+            <div className="alert alert-info" role="status">
+              You signed in with a temporary password. Choose a new password to continue.
+            </div>
+          )}
           {message && (
             <div className="alert alert-warning" role="alert">
               {message}
@@ -70,7 +76,7 @@ export function ChangePasswordPage() {
           <form onSubmit={handleSubmit}>
             <PasswordField
               id="current-password"
-              label="Current Password"
+              label={mustChangePassword ? 'Temporary Password' : 'Current Password'}
               autoComplete="current-password"
               value={currentPassword}
               onChange={setCurrentPassword}

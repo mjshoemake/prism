@@ -132,14 +132,14 @@ What happens when the Users page loads:
 sequenceDiagram
     participant P as UsersPage
     participant H as useUsers()
-    participant A as usersApi.list()
+    participant A as usersApi.list(enterprisePk)
     participant C as client.ts
     participant S as API /api/users
     P->>H: render → hook runs
     H->>H: loading = true
     H->>A: list()
-    A->>C: api.get<User[]>('/api/users')
-    C->>S: GET /api/users
+    A->>C: api.get<User[]>('/api/users?enterprisePk=7')
+    C->>S: GET /api/users?enterprisePk=7
     S-->>C: 200 [ … ]
     C-->>A: parsed JSON (or throws ApiError)
     A-->>H: User[]
@@ -207,11 +207,13 @@ frontend/
     │   ├── layout/             AppLayout (NavBar + page), NavBar
     │   ├── toast/              ToastProvider, useToast, ToastContext
     │   ├── DropdownSelect.tsx  Bootstrap dropdown that behaves like a <select>
+    │   ├── Modal.tsx           accessible dialog (Esc, focus trap, portal); render to open, unmount to close
     │   ├── ErrorAlert.tsx
     │   └── LoadingSpinner.tsx
     ├── features/               ── one folder per screen/domain
     │   ├── metrics/            MetricsPage, useMetricsExplorer, metricDefinitions, filters, components/
-    │   ├── users/              UsersPage, useUsers, components/ (CreateUserForm, UsersTable, UserRow)
+    │   ├── users/              UsersPage, useUsers, userList (filter/sort), temporaryPassword, format,
+    │   │                       components/ (UsersTable, UserRow, AddUserModal, EditUserModal, TemporaryPasswordFields)
     │   └── auth/               LoginPage, ChangePasswordPage
     ├── theme/                  purple-black-theme.css (Bootstrap overrides), palette.ts (chart colours)
     └── styles/layout.css       page layout (split view, narrow pages, toast position)
@@ -298,7 +300,8 @@ export function useTeams() {
 ```
 
 For pages that change data, follow `features/users/useUsers.ts`: each action calls the API, reloads,
-and shows a success or warning toast.
+shows a success toast, and returns an `ActionOutcome` (`{ ok, message }`) so the modal or form that
+started it can show a failure message next to the fields.
 
 ### Step 4 — Build the components (`src/features/teams/components/TeamsTable.tsx`)
 
@@ -446,10 +449,35 @@ metric metadata moves server-side (see the overview, §5) — don't build more o
 
 ### Add a form
 
-Copy the pattern in `features/users/components/CreateUserForm.tsx` or `features/auth/ChangePasswordPage.tsx`:
+Copy the pattern in `features/users/components/AddUserModal.tsx` or `features/auth/ChangePasswordPage.tsx`:
 controlled inputs with `useState`, `<label htmlFor>` for every input, validate in `handleSubmit`, show a
 message with `alert-warning`, disable the submit button while saving, and call a hook action that
-returns `true` on success.
+returns an `ActionOutcome`.
+
+### Add a dialog (add / edit pattern)
+
+Prism's standard for creating and editing records is **a read-only list plus a modal**, as on the Users
+page: an "+ Add …" button opens an add modal; clicking a row (or its edit icon) opens an edit modal.
+Use `components/Modal.tsx`:
+
+```tsx
+{open && (
+  <Modal
+    title="Add team"
+    onClose={() => setOpen(false)}
+    footer={<>
+      <button type="button" className="btn btn-outline-secondary" onClick={() => setOpen(false)}>Cancel</button>
+      <button type="submit" form="add-team-form" className="btn btn-primary">Add team</button>
+    </>}
+  >
+    <form id="add-team-form" onSubmit={handleSubmit} noValidate>…</form>
+  </Modal>
+)}
+```
+
+Render it to open, stop rendering it to close. The modal handles Esc, focus (moves in, stays in, returns
+on close) and `aria` labelling; clicking the backdrop deliberately does nothing so typed data isn't lost.
+Prefer deactivation over deletion for anything other records may refer to (users never get deleted).
 
 ### Add a reusable component
 
@@ -473,6 +501,12 @@ from the feature hook. Endpoints that answer failures with a JSON body (like the
 | Page layout (sidebar width, chart height, toast position) | `src/styles/layout.css` |
 | A single component's look | Prefer Bootstrap utility classes (`mb-3`, `d-flex`, `text-muted`) in the JSX |
 
+**Buttons:** use only the variants the theme styles — `btn-primary` (main action: Save, Add, confirm),
+`btn-secondary` / `btn-outline-secondary` (Cancel and secondary actions) and `btn-outline-primary`.
+Bootstrap's other variants (`btn-warning`, `btn-danger`, `btn-info`, `btn-success` and their outline
+forms) are not themed and render in default Bootstrap colours. Coloured badges and alerts for status
+(e.g. `text-bg-warning` "Temp password") are fine.
+
 Import order in `main.tsx` matters: Bootstrap → theme → layout. Dropdowns and the mobile navbar use
 Bootstrap's own JavaScript through `data-bs-toggle` attributes (imported once in `main.tsx`).
 
@@ -493,6 +527,8 @@ Real protection must be enforced by the API.
 | Route guard | `auth/RequireAuth.tsx` | Redirects to `/login` when there is no session, then returns the user to the page they wanted. |
 | Output escaping | React | All text rendered with `{…}` is escaped, which prevents script injection (XSS). |
 | Password rules | `features/auth/ChangePasswordPage.tsx` | Minimum 8 characters and confirmation match — repeated by the server. |
+| Temporary passwords | `auth/RequireAuth.tsx`, `features/auth/LoginPage.tsx` | A user signed in with a temporary password (new user or admin reset) is held on Change Password until they choose a new one. |
+| Enterprise scoping | `features/users/useUsers.ts` | The Users page lists and creates users only in the signed-in user's enterprise (`useAuth().enterprisePk`). |
 | No hard-coded hosts | `api/client.ts` | Relative `/api` URLs; same origin in production, proxy in development. |
 
 ### 7.2 Known gaps (be aware; don't build on them)
@@ -503,6 +539,7 @@ Real protection must be enforced by the API.
 | The session is just the stored login response — **no token**. | Editing `localStorage` "signs you in" to the UI; change-password trusts the `X-User-ID` header. | API backlog #5 |
 | The metrics page sends **SQL fragments** (`selectSql`, WHERE clause). | A crafted request can run arbitrary SQL. | API backlog #1; fix is in the overview §5 |
 | No roles. | Every signed-in user sees Admin → Users. | Target design |
+| Enterprise and temp-password rules are enforced only in the UI. | The API accepts any `enterprisePk` and doesn't block a user with a temporary password. | API backlog #5 |
 
 When real authentication arrives, expect: a token or session cookie sent by `client.ts` on every
 request, `useAuth()` exposing roles, and `RequireAuth` accepting a required role. Pages written with the

@@ -58,6 +58,23 @@ export const api = {
   delete: <T>(path: string, options?: RequestOptions) => request<T>('DELETE', path, undefined, options),
 };
 
+/**
+ * For endpoints that answer failures (400/401/409) with a JSON body like
+ * {"success": false, "message": "..."}: returns that body instead of throwing.
+ * Network errors and non-JSON error bodies are still thrown.
+ */
+export async function withActionResult<T extends { success: boolean }>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    const result = error instanceof ApiError ? error.json<T>() : undefined;
+    if (result && typeof result.success === 'boolean') {
+      return result;
+    }
+    throw error;
+  }
+}
+
 /** True for the error fetch throws when a request is cancelled via AbortController. */
 export function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';

@@ -33,6 +33,11 @@ export function LoginPage() {
         return;
       }
       signIn(result);
+      if (result.user?.is_temp_password) {
+        showToast('Please choose a new password to continue.', 'info');
+        navigate('/change-password', { replace: true });
+        return;
+      }
       showToast('Welcome!', 'success');
       const from = (location.state as { from?: string } | null)?.from;
       navigate(from && from !== '/login' ? from : '/metrics', { replace: true });

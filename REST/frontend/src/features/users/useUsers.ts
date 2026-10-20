@@ -1,88 +1,91 @@
 import { useCallback, useEffect, useState } from 'react';
 import { errorMessage } from '../../api/client';
 import { usersApi } from '../../api/usersApi';
-import type { CreateUserInput, User } from '../../api/types';
+import type { UpdateUserInput, User } from '../../api/types';
 import { useToast } from '../../components/toast/useToast';
 
-/** Editable fields of a row in the users table. */
-export type UserEdits = Partial<Pick<User, 'email' | 'username' | 'is_active'>>;
+/** Result of a user action, for showing a message inside the modal that started it. */
+export interface ActionOutcome {
+  ok: boolean;
+  message?: string;
+}
 
 /**
- * Loads the user list and wraps the user CRUD calls with success/failure toasts.
- * Each mutating action resolves to true on success.
+ * Users of one enterprise plus the admin actions on them. Success shows a toast; failures are
+ * returned as an ActionOutcome so the open modal can show the message next to the form.
  */
-export function useUsers() {
+export function useUsers(enterprisePk: number | null) {
   const { showToast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
-    try {
-      setLoading(true);
-      setUsers(await usersApi.list());
-      setError(null);
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const reload = useCallback(
+    async (signal?: AbortSignal) => {
+      if (enterprisePk === null) return;
+      try {
+        setLoading(true);
+        setUsers(await usersApi.list(enterprisePk, signal));
+        setError(null);
+      } catch (e) {
+        if (!signal?.aborted) setError(`Failed to load users: ${errorMessage(e)}`);
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [enterprisePk],
+  );
 
   useEffect(() => {
-    void reload();
+    const controller = new AbortController();
+    void reload(controller.signal);
+    return () => controller.abort();
   }, [reload]);
 
-  /** Local (unsaved) edit of a row; persisted by saveUser. */
-  const editUser = useCallback((userId: string, edits: UserEdits) => {
-    setUsers((prev) => prev.map((u) => (u.user_id === userId ? { ...u, ...edits } : u)));
-  }, []);
-
-  const run = useCallback(
-    async (action: () => Promise<unknown>, success: string, failurePrefix: string, reloadAfter = true) => {
+  const createUser = useCallback(
+    async (email: string, username: string, temporaryPassword: string | null): Promise<ActionOutcome> => {
+      if (enterprisePk === null) return { ok: false, message: 'Your session has no enterprise. Sign in again.' };
       try {
-        await action();
-        if (reloadAfter) await reload();
-        showToast(success, 'success');
-        return true;
+        const result = await usersApi.create({ enterprise_pk: enterprisePk, email, username, temporaryPassword });
+        if (!result.success) return { ok: false, message: result.message ?? 'The user could not be created.' };
+        await reload();
+        showToast(`User ${email} created`, 'success');
+        return { ok: true };
       } catch (e) {
-        showToast(`${failurePrefix}: ${errorMessage(e)}`, 'warning');
-        return false;
+        return { ok: false, message: `Create failed: ${errorMessage(e)}` };
+      }
+    },
+    [enterprisePk, reload, showToast],
+  );
+
+  const updateUser = useCallback(
+    async (user: User, changes: UpdateUserInput): Promise<ActionOutcome> => {
+      try {
+        await usersApi.update(user.user_id, changes);
+        await reload();
+        showToast('User updated', 'success');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: `Update failed: ${errorMessage(e)}` };
       }
     },
     [reload, showToast],
   );
 
-  const createUser = useCallback(
-    (input: CreateUserInput) => run(() => usersApi.create(input), 'User created successfully', 'Create failed'),
-    [run],
+  const resetPassword = useCallback(
+    async (user: User, temporaryPassword: string | null): Promise<ActionOutcome> => {
+      try {
+        const result = await usersApi.resetPassword(user.user_id, temporaryPassword);
+        if (!result.success) return { ok: false, message: result.message ?? 'The password could not be reset.' };
+        await reload();
+        showToast(result.message ?? 'Password reset', 'success');
+        return { ok: true, message: result.message };
+      } catch (e) {
+        return { ok: false, message: `Reset failed: ${errorMessage(e)}` };
+      }
+    },
+    [reload, showToast],
   );
 
-  const saveUser = useCallback(
-    (user: User) =>
-      run(
-        () => usersApi.update(user.user_id, { email: user.email, username: user.username, isActive: user.is_active }),
-        'User updated successfully',
-        'Update failed',
-      ),
-    [run],
-  );
-
-  const deleteUser = useCallback(
-    (user: User) => run(() => usersApi.remove(user.user_id), 'User deleted successfully', 'Delete failed'),
-    [run],
-  );
-
-  const setPassword = useCallback(
-    (user: User, password: string) =>
-      run(
-        () => usersApi.setPassword(user.user_id, password),
-        'Password updated successfully',
-        'Password update failed',
-        false,
-      ),
-    [run],
-  );
-
-  return { users, loading, error, reload, editUser, createUser, saveUser, deleteUser, setPassword };
+  return { users, loading, error, reload, createUser, updateUser, resetPassword };
 }

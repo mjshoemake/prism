@@ -61,3 +61,23 @@ label.form-label {
   right: 1rem;
   z-index: 1080;
 }
+
+/* ---- Users page ------------------------------------------------------------- */
+
+.users-search {
+  width: 14rem;
+}
+
+.users-table .user-row {
+  cursor: pointer;
+}
+
+.users-table .user-row--inactive td {
+  opacity: 0.6;
+}
+
+.users-table .sort-header {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}

@@ -75,13 +75,13 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 | POST | `/api/metrics/sprint-metrics` | `fetchMetrics(focusLevelColumn, valueColumns, whereClause)` | Body = `SprintMetricsRequest`. Missing/empty field → `ResourceNotFoundException` (500). **Client sends raw SQL fragments.** |
 | GET | `/api/metrics/focus-areas-list` | `fetchFocusAreas()` | `Focus_Areas` ordered by `sort_order` |
 | GET | `/api/metrics/focus-levels-list/{focusAreaPK}` | `fetchFocusLevels(int)` | pk bound as int (non-numeric → 400); ordered by `sort_order` = drill-down order |
-| GET | `/api/users` | `listUsers()` | ordered by `created_at DESC` |
+| GET | `/api/users?enterprisePk=N` | `listUsers(long)` | users of one enterprise (active + inactive; UI hides inactive by default). Enterprise comes from the request until auth exists (TODO #5) |
 | GET | `/api/users/{userId}` | `getUser()` → `Optional` | 404 if absent or not a UUID |
-| POST | `/api/users` | `createUser(enterprisePk, email, username)` | JSON field `enterprise_pk`; 400 if pk null/0 or email empty; uses enterprise `temp_password_hash`, `is_temp_password = TRUE` |
+| POST | `/api/users` | `createUser(enterprisePk, email, username, temporaryPassword)` | body `{enterprise_pk, email, username, temporaryPassword}`; `temporaryPassword` null → enterprise `temp_password_hash`. User starts with `is_temp_password = TRUE`. 400 `{success:false,message}` (bad input / no enterprise default), 409 duplicate email |
 | PUT | `/api/users/{userId}` | `updateUser(...)` | `isActive` null → unchanged (COALESCE); 204; 400 if id not a UUID (same for the other `{userId}` PUT/DELETE) |
 | PUT | `/api/users/{userId}/password` | `updatePassword()` | body `{password}`; 204 |
-| PUT | `/api/users/{userId}/reset-password` | `updatePassword()` | body `{newPassword}`; 204 |
-| DELETE | `/api/users/{userId}` | `deleteUser()` | 204 |
+| PUT | `/api/users/{userId}/reset-password` | `resetToTemporaryPassword()` | body `{temporaryPassword}` (null → enterprise default); sets `is_temp_password = TRUE`, clears lockout; 200/400 `UserActionResult` |
+| DELETE | `/api/users/{userId}` | `deleteUser()` | 204. **Not used by the UI** — users are deactivated, never deleted (owner decision) |
 | POST | `/api/auth/login` | `authenticateUser(email, pw)` | 200 `{success:true,user}` / 401 `{success:false,message}` / 400 if fields empty |
 | POST | `/api/auth/change-password` | `changePassword(userId, cur, new)` | header `X-User-ID`; new pw ≥ 8 chars; 400 on failure |
 
@@ -92,6 +92,7 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 - **`Metrics`** (`metric_pk`, `name`, `valuecolumnsforselectclause`, `fromclause`) — metric SQL pieces; seeded with Say/Do Ratio. **Not yet read by the Java code.**
 - **`Users`** (`user_id`, `enterprise_pk`, `email`, `username`, `password_hash`, `password_algo`, `password_params` jsonb, `password_updated_at`, `is_active`, `is_temp_password`, `failed_login_count`, `locked_until`, `last_login_at`, `created_at`, `updated_at`). Lockout: 5 failed logins → `locked_until = now() + 15 min`.
 - **`Enterprises`** (tenant) — `enterprise_pk`, `name`, `url`, `auth_token`, `temp_password_hash`. All prism tables use quoted CamelCase names (`"prism"."Users"`); quoted names are case-sensitive.
+- **CITEXT gotcha:** the Postgres driver returns `citext` columns (`Users.email`, `Users.username`) as `PGobject`, which Jackson serializes as `{"type":"citext","value":…}`. Always select them as `email::text AS email`.
 - Confirmed types: `Users.user_id` **UUID**, `Users.email` CITEXT, `Enterprises.enterprise_pk` BIGSERIAL, `focus_area_pk` **integer**.
 - DDL lives in `~/Documents/Work/prism/SQL/` (001 star schema + Focus tables, 002–004 demo data, 005 Focus_Areas rebuild, 006 Enterprises, 007 Users, 008 Metrics + Focus_Levels data, 009 sort_order + Focus_Levels PK/FK). **The API requires 009 to have been run.**
 - **Target data model** (owner, Oct 2026): all metadata enterprise-scoped; Metric Groups parent Metrics and Focus Areas; opt-out exclusions per metric/focus area/level; `sort_order` on Focus_Areas/Levels; one metric group per dashboard; dashboards → tabs (≤4 charts) → shares; role-based write access to metadata.
@@ -114,12 +115,12 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 2. ~~SQL injection — `fetchFocusLevels`~~ **fixed Oct 2026** (bound int parameter).
 3. **400 vs 500**: missing request fields throw `ResourceNotFoundException`/`ParameterValueRequiredException` with no `@ControllerAdvice`, so clients get 500. Add a handler returning 400 (and rename the exception for missing params).
 4. ~~`user_id` binding bug~~ **fixed Oct 2026** (all user queries bind a `UUID`; malformed IDs → 400/404).
-5. **No authentication** on any endpoint; `change-password` trusts the `X-User-ID` header.
+5. **No authentication** on any endpoint; `change-password` trusts the `X-User-ID` header. Consequences to fix with sessions: the server must take the enterprise from the session (not `?enterprisePk` / `enterprise_pk`), block users with `is_temp_password` from everything except change-password, and refuse self-deactivation. Future: super-users spanning enterprises get an enterprise picker; a list never mixes enterprises.
 6. CORS allows `"null"` and `"file://"` origins with credentials (for opening static pages from disk) and only `http://localhost:8080` — revisit before deployment. Test/production URLs are TBD; their origins (or a per-environment property) must be added then. All `localhost` addresses in docs mean a local install.
 7. DB credentials are committed in `application.properties`.
 8. "Works identically" verification against a live DB was deferred.
 9. `test.bat` jar name is stale.
-10. Frontend: Users page uses `window.confirm/prompt`; session is just the stored login response (no token). (Filters persisting across focus-area changes is intended — it's how a selection is "rotated" onto another dimension.)
+10. Frontend: session is just the stored login response (no token); temp-password and enterprise rules are UI-enforced only (see #5). (Filters persisting across focus-area changes is intended — it's how a selection is "rotated" onto another dimension.)
 
 ## Working notes for Claude sessions
 

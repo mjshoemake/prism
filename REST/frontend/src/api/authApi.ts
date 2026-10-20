@@ -1,21 +1,9 @@
-import { api, ApiError } from './client';
+import { api, withActionResult } from './client';
 import type { AuthResult } from './types';
 
-/**
- * The auth endpoints answer failures (400/401) with a JSON AuthResult body, e.g.
- * {"success": false, "message": "Invalid email or password."}. Return that body instead of throwing.
- */
-async function withAuthResult(call: () => Promise<AuthResult>): Promise<AuthResult> {
-  try {
-    return await call();
-  } catch (error) {
-    const result = error instanceof ApiError ? error.json<AuthResult>() : undefined;
-    if (result && typeof result.success === 'boolean') {
-      return result;
-    }
-    throw error;
-  }
-}
+// The auth endpoints answer failures (400/401) with {"success": false, "message": "..."}; withActionResult
+// returns that body instead of throwing.
+const withAuthResult = withActionResult<AuthResult>;
 
 export const authApi = {
   login: (email: string, password: string) =>

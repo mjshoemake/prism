@@ -60,7 +60,8 @@ src/
 │   ├── toast/               ToastProvider + useToast (bottom-right snackbar)
 │   ├── DropdownSelect.tsx   Bootstrap dropdown that behaves like a <select>
 │   ├── ErrorAlert.tsx
-│   └── LoadingSpinner.tsx
+│   ├── LoadingSpinner.tsx
+│   └── Modal.tsx            Accessible dialog used for add/edit forms
 ├── features/                One folder per screen/domain
 │   ├── metrics/
 │   │   ├── MetricsPage.tsx          Page: sidebar + chart
@@ -71,7 +72,7 @@ src/
 │   ├── users/
 │   │   ├── UsersPage.tsx
 │   │   ├── useUsers.ts              List + CRUD with toasts
-│   │   └── components/              CreateUserForm, UsersTable, UserRow
+│   │   └── components/              UsersTable, UserRow, AddUserModal, EditUserModal, TemporaryPasswordFields
 │   └── auth/                        LoginPage, ChangePasswordPage
 ├── theme/
 │   ├── purple-black-theme.css       Bootstrap overrides (colours, cards, forms, dropdowns…)
@@ -102,5 +103,4 @@ Add a `MetricDefinition` to `features/metrics/metricDefinitions.ts` (SQL alias `
 ## Known issues / TODO
 
 - The client sends SQL fragments (`selectSql`, WHERE clause) to the API — see backlog in `REST/CLAUDE.md`.
-- Users page uses `window.confirm` / `window.prompt`; replace with Bootstrap modals.
 - No real authentication: the session is just the stored login response.

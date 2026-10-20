@@ -221,10 +221,10 @@ That one change makes the API generic *and* closes the injection risk.
 
 | Area | Today | Target |
 |---|---|---|
-| Login | Email + password checked against a bcrypt hash; 5 failed attempts lock the account for 15 minutes. | Same, plus a real session or token issued by the server. |
+| Login | Email + password checked against a bcrypt hash; 5 failed attempts lock the account for 15 minutes. New users and admin resets get a **temporary password** (enterprise default or admin-entered) that must be changed at the next sign-in (UI-enforced). | Same, plus a real session or token issued by the server, which also enforces the password change. |
 | API access | **Not authenticated.** Any caller can use every endpoint; the UI just hides pages when signed out. | Every request authenticated; enterprise and roles derived from the session. |
 | Authorization | None. | Roles (e.g. viewer, dashboard author, metrics admin, enterprise admin). |
-| Tenant isolation | None (no enterprise filtering). | All metadata and data queries scoped to the user's enterprise. |
+| Tenant isolation | User administration is scoped to the signed-in user's enterprise **in the UI only** (the API trusts the enterprise sent by the browser). | All metadata and data queries scoped to the user's enterprise by the server. Super-users can switch enterprise with a picker; lists never mix enterprises. |
 | Metric queries | Client sends SQL fragments (injection risk). | Client sends IDs/values; SQL comes from metadata; values bound as parameters. |
 | Secrets | `Enterprises.auth_token` stored as plain text; DB credentials in `application.properties`. | Encrypted or in a secrets store; never returned by the API. |
 | Auditing | Logins, user changes and password changes written to `logs/audit.log`. | Same, plus the acting user once authentication exists. |
@@ -236,7 +236,9 @@ The UI's own security rules are covered in the [UI developer guide](../frontend/
 | Capability | Status |
 |---|---|
 | One metric (Say/Do Ratio) with drill-down across Time and Organization | **Working** |
-| Login, user administration, change password | **Working** (API unauthenticated — see §6) |
+| Login, change password, forced change of temporary passwords | **Working** (API unauthenticated — see §6) |
+| User administration: list (deactivated hidden), add/edit in modals, deactivate (no delete), reset to temporary password | **Working** |
+| System Settings page (e.g. enterprise default temporary password) | Planned — today `Enterprises.temp_password_hash` is set directly in the database |
 | Focus area / level ordering via `sort_order` | **Working** (SQL/009) |
 | API reads metric SQL from the `Metrics` table | Planned |
 | Metric Groups, exclusions, enterprise scoping | Planned (design agreed, tables not yet created) |

@@ -29,24 +29,30 @@ export type MetricRow = Record<string, string | number | null>;
 
 // ---- Users ----------------------------------------------------------------
 
+/** Timestamps arrive as ISO-8601 strings (Jackson's Spring Boot default); epoch millis are tolerated. */
+export type Timestamp = string | number;
+
 export interface User {
   user_id: string;
   enterprise_pk: number;
   email: string;
   username: string | null;
   is_active: boolean;
+  /** True until the user replaces a temporary password; the UI forces a password change. */
   is_temp_password: boolean;
   failed_login_count: number;
-  locked_until: string | null;
-  last_login_at: string | null;
-  created_at: string;
-  updated_at: string;
+  locked_until: Timestamp | null;
+  last_login_at: Timestamp | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
 }
 
 export interface CreateUserInput {
   enterprise_pk: number;
   email: string;
   username: string;
+  /** null = use the enterprise's default temporary password. */
+  temporaryPassword: string | null;
 }
 
 export interface UpdateUserInput {
@@ -59,7 +65,10 @@ export interface UpdateUserInput {
 
 export type AuthenticatedUser = Omit<User, 'created_at' | 'updated_at'>;
 
-/** Response of /api/auth/login and /api/auth/change-password (UserActionResult on the server). */
+/**
+ * Response of /api/auth/login, /api/auth/change-password, and failures of the user-admin endpoints
+ * (UserActionResult on the server).
+ */
 export interface AuthResult {
   success: boolean;
   message?: string;
