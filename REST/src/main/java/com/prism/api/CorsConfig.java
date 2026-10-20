@@ -2,17 +2,23 @@ package com.prism.api;
 
 import java.util.List;
 
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.prism.common.logging.LogCategory;
+
 @Configuration
 public class CorsConfig {
 
+    private static final Logger log = LogCategory.APPLICATION.logger(CorsConfig.class);
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        log.debug("Started");
         var configuration = new CorsConfiguration();
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));

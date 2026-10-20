@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.prism.api.admin.UserActionResult;
 import com.prism.api.admin.UsersService;
 import com.prism.common.logging.LogCategory;
+import com.prism.common.logging.PerformanceLog;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -36,34 +37,39 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<UserActionResult> login(@RequestBody LoginRequest request) {
-        log.debug("login() called.");
-        if (!StringUtils.hasLength(request.email()) || !StringUtils.hasLength(request.password())) {
-            log.debug("login() rejected: email or password missing.");
-            return ResponseEntity.badRequest().body(UserActionResult.failed("Email and password are required."));
-        }
+        log.debug("Started");
+        return PerformanceLog.time("AuthController.login", () -> {
+            if (!StringUtils.hasLength(request.email()) || !StringUtils.hasLength(request.password())) {
+                log.debug("Rejected: email or password missing.");
+                return ResponseEntity.badRequest().body(UserActionResult.failed("Email and password are required."));
+            }
 
-        var result = usersService.authenticateUser(request.email(), request.password());
-        log.debug("login() for '{}': {}", request.email(), result.success() ? "SUCCESS" : "FAILURE");
-        return result.success()
-                ? ResponseEntity.ok(result)
-                : ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+            var result = usersService.authenticateUser(request.email(), request.password());
+            log.debug("Result for '{}': {}", request.email(), result.success() ? "SUCCESS" : "FAILURE");
+            return result.success()
+                    ? ResponseEntity.ok(result)
+                    : ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+        });
     }
 
     @PostMapping("/change-password")
     public ResponseEntity<UserActionResult> changePassword(@RequestHeader("X-User-ID") String userId,
                                                            @RequestBody ChangePasswordRequest request) {
-        if (!StringUtils.hasLength(request.currentPassword()) || !StringUtils.hasLength(request.newPassword())) {
-            return ResponseEntity.badRequest()
-                    .body(UserActionResult.failed("Current password and new password are required."));
-        }
-        if (request.newPassword().length() < MIN_PASSWORD_LENGTH) {
-            return ResponseEntity.badRequest()
-                    .body(UserActionResult.failed("New password must be at least 8 characters long."));
-        }
+        log.debug("Started");
+        return PerformanceLog.time("AuthController.changePassword", () -> {
+            if (!StringUtils.hasLength(request.currentPassword()) || !StringUtils.hasLength(request.newPassword())) {
+                return ResponseEntity.badRequest()
+                        .body(UserActionResult.failed("Current password and new password are required."));
+            }
+            if (request.newPassword().length() < MIN_PASSWORD_LENGTH) {
+                return ResponseEntity.badRequest()
+                        .body(UserActionResult.failed("New password must be at least 8 characters long."));
+            }
 
-        var result = usersService.changePassword(userId, request.currentPassword(), request.newPassword());
-        return result.success()
-                ? ResponseEntity.ok(result)
-                : ResponseEntity.badRequest().body(result);
+            var result = usersService.changePassword(userId, request.currentPassword(), request.newPassword());
+            return result.success()
+                    ? ResponseEntity.ok(result)
+                    : ResponseEntity.badRequest().body(result);
+        });
     }
 }

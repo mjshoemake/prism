@@ -14,8 +14,10 @@
 
     <springProperty scope="context" name="LOG_DIR" source="prism.logging.dir" defaultValue="logs"/>
 
+    <!-- %logger is "Category.Class"; %method adds the calling method (Logback computes it only for events
+         that are actually logged, so DEBUG "Started" lines cost nothing when DEBUG is off). -->
     <property name="CONSOLE_PATTERN"
-              value="[%d{MM-dd-yyyy HH:mm:ss-SSS}] %-15.15thread %-32logger{32} %-5level - %msg%n"/>
+              value="[%d{MM-dd-yyyy HH:mm:ss-SSS}] %-15.15thread %-5level %-60(%logger{45}.%method) - %msg%n"/>
     <!-- Line breaks in audit messages are flattened so a crafted value (e.g. an email) can't forge entries. -->
     <property name="AUDIT_PATTERN" value="[%d{MM-dd-yyyy HH:mm:ss}] %thread - %replace(%msg){'[\r\n]+', ' '}%n"/>
     <property name="PERF_PATTERN" value="[%d{MM-dd-yyyy HH:mm:ss-SSS}] %thread - %msg%n"/>

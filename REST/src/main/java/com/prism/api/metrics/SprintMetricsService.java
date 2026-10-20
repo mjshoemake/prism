@@ -10,10 +10,13 @@ import org.springframework.util.StringUtils;
 
 import com.prism.common.logging.LogCategory;
 import com.prism.common.logging.PerformanceLog;
+import com.prism.common.utils.LogUtils;
 
 @Service
 public class SprintMetricsService {
 
+    private static final Logger log = LogCategory.SERVICE.logger(SprintMetricsService.class);
+    private static final Logger resultSetLog = LogCategory.RESULT_SET.logger(SprintMetricsService.class);
     private static final Logger sqlLog = LogCategory.SQL.logger(SprintMetricsService.class);
 
     private static final String METRICS_SQL = """
@@ -52,6 +55,7 @@ public class SprintMetricsService {
     public List<Map<String, Object>> fetchMetrics(String focusLevelColumn,
                                                   String valueColumnsForSelectClause,
                                                   String whereClause) {
+        log.debug("Started");
         var valueColumns = StringUtils.hasLength(valueColumnsForSelectClause)
                 ? ", " + valueColumnsForSelectClause
                 : "";
@@ -61,8 +65,13 @@ public class SprintMetricsService {
     }
 
     public List<Map<String, Object>> fetchFocusAreas() {
+        log.debug("Started");
         sqlLog.debug("SQL: {}", FOCUS_AREAS_SQL);
-        return PerformanceLog.time("fetchFocusAreas", () -> jdbcTemplate.queryForList(FOCUS_AREAS_SQL));
+        
+        List<Map<String, Object>> result = PerformanceLog.time("fetchFocusAreas", () -> jdbcTemplate.queryForList(FOCUS_AREAS_SQL));
+        resultSetLog.debug("Focus Areas: size={}", result.size());
+        LogUtils.debug(resultSetLog, result, "   ", true); 
+        return result;
     }
 
     /**
@@ -70,8 +79,12 @@ public class SprintMetricsService {
      * Switch to a bound parameter once the column type of Focus_Levels.focus_area_pk is confirmed.
      */
     public List<Map<String, Object>> fetchFocusLevels(String focusAreaPK) {
+        log.debug("Started");
         var sql = FOCUS_LEVELS_SQL.formatted(focusAreaPK);
         sqlLog.debug("SQL: {}", sql);
-        return PerformanceLog.time("fetchFocusLevels", () -> jdbcTemplate.queryForList(sql));
+        List<Map<String, Object>> result = PerformanceLog.time("fetchFocusLevels", () -> jdbcTemplate.queryForList(sql));
+        resultSetLog.debug("Focus Levels: size={}", result.size());
+        LogUtils.debug(resultSetLog, result, "   ", true);
+        return result;
     }
 }

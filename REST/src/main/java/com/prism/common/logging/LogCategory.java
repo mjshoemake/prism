@@ -28,6 +28,10 @@ public enum LogCategory {
     SQL("SQL"),
     /** Security-relevant events (logins, user and password changes). Also written to audit.log. */
     AUDIT("Audit"),
+    /** Result Set logging, to show the contents of result sets. */
+    RESULT_SET("ResultSet"),
+    /** Core logging, to show the contents of core operations. */
+    CORE("Core"),
     /** Timings of expensive operations. Also written to perf.log. */
     PERFORMANCE("Performance");
 

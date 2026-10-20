@@ -93,6 +93,7 @@ public class UsersService {
     }
 
     public List<Map<String, Object>> listUsers() {
+        log.debug("Started");
         return jdbcTemplate.queryForList(LIST_USERS_SQL);
     }
 
@@ -100,6 +101,7 @@ public class UsersService {
     // updatePassword/changePassword bind a UUID. If user_id is a uuid column, the String-bound queries
     // will fail in Postgres; to be confirmed once the DB is available.
     public Optional<Map<String, Object>> getUser(String userId) {
+        log.debug("Started");
         try {
             return Optional.of(jdbcTemplate.queryForMap(GET_USER_SQL, userId));
         } catch (EmptyResultDataAccessException e) {
@@ -108,6 +110,7 @@ public class UsersService {
     }
 
     public Map<String, Object> createUser(Long enterprisePk, String email, String username) {
+        log.debug("Started");
         // New users start with the enterprise's temporary password hash.
         var tempPasswordHash = jdbcTemplate.queryForObject(ENTERPRISE_TEMP_HASH_SQL, String.class, enterprisePk);
         if (!StringUtils.hasLength(tempPasswordHash)) {
@@ -120,6 +123,7 @@ public class UsersService {
     }
 
     public int updateUser(String userId, String email, String username, Boolean isActive) {
+        log.debug("Started");
         int rows = jdbcTemplate.update(UPDATE_USER_SQL, email, username, isActive, userId);
         audit.info("USER_UPDATED userId={} email={} isActive={} rows={}", userId, email, isActive, rows);
         return rows;
@@ -127,19 +131,21 @@ public class UsersService {
 
     /** Administrator sets a user's password (PUT /api/users/{id}/password and /reset-password). */
     public int updatePassword(String userId, String rawPassword) {
+        log.debug("Started");
         int rows = storePassword(userId, rawPassword);
         audit.info("PASSWORD_SET userId={} rows={}", userId, rows);
         return rows;
     }
 
     public int deleteUser(String userId) {
+        log.debug("Started");
         int rows = jdbcTemplate.update(DELETE_USER_SQL, userId);
         audit.info("USER_DELETED userId={} rows={}", userId, rows);
         return rows;
     }
 
     public UserActionResult authenticateUser(String email, String password) {
-        log.debug("authenticateUser(email: '{}') called.", email);
+        log.debug("Started");
 
         Map<String, Object> user;
         try {
@@ -177,6 +183,7 @@ public class UsersService {
     }
 
     public UserActionResult changePassword(String userId, String currentPassword, String newPassword) {
+        log.debug("Started");
         try {
             var currentHash = jdbcTemplate.queryForObject(CURRENT_HASH_SQL, String.class, parseUserId(userId));
             if (!SecurityUtils.verifyPassword(currentPassword, currentHash)) {
@@ -194,15 +201,18 @@ public class UsersService {
     }
 
     private int storePassword(String userId, String rawPassword) {
+        log.debug("Started");
         var hash = SecurityUtils.encryptPassword(rawPassword);
         return jdbcTemplate.update(UPDATE_PASSWORD_SQL, hash, PASSWORD_ALGO, passwordParams(), parseUserId(userId));
     }
 
     private void incrementFailedLoginCount(String userId) {
+        log.debug("Started");
         jdbcTemplate.update(INCREMENT_FAILED_LOGIN_SQL, UUID.fromString(userId));
     }
 
     private static UUID parseUserId(String userId) {
+        log.debug("Started");
         try {
             return UUID.fromString(userId);
         } catch (IllegalArgumentException e) {
@@ -211,6 +221,7 @@ public class UsersService {
     }
 
     private static PGobject passwordParams() {
+        log.debug("Started");
         var jsonb = new PGobject();
         jsonb.setType("jsonb");
         try {
@@ -223,6 +234,7 @@ public class UsersService {
 
     /** The Postgres driver returns timestamps as java.sql.Timestamp; OffsetDateTime is handled for safety. */
     private static boolean isInFuture(Object timestamp) {
+        log.debug("Started");
         return switch (timestamp) {
             case Date date -> date.after(new Date());
             case OffsetDateTime dateTime -> dateTime.isAfter(OffsetDateTime.now());

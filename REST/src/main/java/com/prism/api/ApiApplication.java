@@ -12,6 +12,7 @@ public class ApiApplication {
     private static final Logger log = LogCategory.APPLICATION.logger(ApiApplication.class);
 
     public static void main(String[] args) {
+        log.debug("Started");
         log.info("Starting....");
         SpringApplication.run(ApiApplication.class, args);
         log.info("Starting.... done.");

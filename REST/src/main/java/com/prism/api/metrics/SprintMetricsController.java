@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.prism.common.exceptions.ParameterValueRequiredException;
 import com.prism.common.exceptions.ResourceNotFoundException;
 import com.prism.common.logging.LogCategory;
+import com.prism.common.logging.PerformanceLog;
 
 @RestController
 @RequestMapping("/api/metrics")
@@ -31,39 +32,43 @@ public class SprintMetricsController {
 
     @PostMapping("/sprint-metrics")
     public ResponseEntity<List<Map<String, Object>>> getSprintMetrics(@RequestBody SprintMetricsRequest request) {
-        log.debug("getSprintMetrics() called.");
+        log.debug("Started");
+        return PerformanceLog.time("SprintMetricsController.getSprintMetrics", () -> {
+            // StringUtils.hasLength mirrors Groovy truthiness for Strings: null and "" are rejected, "  " is not.
+            // TODO: these should be 400 Bad Request rather than ResourceNotFoundException (currently surfaces as 500).
+            if (!StringUtils.hasLength(request.focusLevelColumn())) {
+                throw new ResourceNotFoundException("FocusLevelColumn not specified.");
+            }
+            if (!StringUtils.hasLength(request.valueColumnsForSelectClause())) {
+                throw new ResourceNotFoundException("ValueColumnsForSelectClause not specified.");
+            }
+            if (request.whereClause() == null) {
+                throw new ResourceNotFoundException("WhereClause not specified.");
+            }
 
-        // StringUtils.hasLength mirrors Groovy truthiness for Strings: null and "" are rejected, "  " is not.
-        // TODO: these should be 400 Bad Request rather than ResourceNotFoundException (currently surfaces as 500).
-        if (!StringUtils.hasLength(request.focusLevelColumn())) {
-            throw new ResourceNotFoundException("FocusLevelColumn not specified.");
-        }
-        if (!StringUtils.hasLength(request.valueColumnsForSelectClause())) {
-            throw new ResourceNotFoundException("ValueColumnsForSelectClause not specified.");
-        }
-        if (request.whereClause() == null) {
-            throw new ResourceNotFoundException("WhereClause not specified.");
-        }
-
-        var rows = svc.fetchMetrics(
-                request.focusLevelColumn(),
-                request.valueColumnsForSelectClause(),
-                request.whereClause());
-        return ResponseEntity.ok(rows);
+            var rows = svc.fetchMetrics(
+                    request.focusLevelColumn(),
+                    request.valueColumnsForSelectClause(),
+                    request.whereClause());
+            return ResponseEntity.ok(rows);
+        });
     }
 
     @GetMapping("/focus-areas-list")
     public ResponseEntity<List<Map<String, Object>>> getFocusAreasList() {
-        log.debug("getFocusAreasList() called.");
-        return ResponseEntity.ok(svc.fetchFocusAreas());
+        log.debug("Started");
+        return PerformanceLog.time("SprintMetricsController.getFocusAreasList",
+                () -> ResponseEntity.ok(svc.fetchFocusAreas()));
     }
 
     @GetMapping("/focus-levels-list/{focusAreaPK}")
     public ResponseEntity<List<Map<String, Object>>> getFocusLevelsList(@PathVariable String focusAreaPK) {
-        log.debug("getFocusLevelsList() called.");
-        if (!StringUtils.hasLength(focusAreaPK)) {
-            throw new ParameterValueRequiredException("Required parameter Focus-Area-ID is empty.");
-        }
-        return ResponseEntity.ok(svc.fetchFocusLevels(focusAreaPK));
+        log.debug("Started");
+        return PerformanceLog.time("SprintMetricsController.getFocusLevelsList", () -> {
+            if (!StringUtils.hasLength(focusAreaPK)) {
+                throw new ParameterValueRequiredException("Required parameter Focus-Area-ID is empty.");
+            }
+            return ResponseEntity.ok(svc.fetchFocusLevels(focusAreaPK));
+        });
     }
 }
