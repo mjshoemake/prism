@@ -196,6 +196,7 @@ frontend/
     │   ├── types.ts            shapes of API JSON (FocusArea, User, AuthResult, …)
     │   ├── metricsApi.ts       /api/metrics/*
     │   ├── usersApi.ts         /api/users/*
+    │   ├── settingsApi.ts      /api/settings/*
     │   └── authApi.ts          /api/auth/* (returns the JSON body on 400/401 instead of throwing)
     ├── auth/                   ── session state
     │   ├── AuthProvider.tsx    holds the login response; persists it (localStorage "prism_auth")
@@ -213,7 +214,8 @@ frontend/
     ├── features/               ── one folder per screen/domain
     │   ├── metrics/            MetricsPage, useMetricsExplorer, metricDefinitions, filters, components/
     │   ├── users/              UsersPage, useUsers, userList (filter/sort), temporaryPassword, format,
-    │   │                       components/ (UsersTable, UserRow, AddUserModal, EditUserModal, TemporaryPasswordFields)
+    │   │                       components/ (UsersTable, UserRow, AddUserModal, EditUserModal, TemporaryPasswordNotice)
+    │   ├── settings/           SystemSettingsPage (Admin → System Settings), useSystemSettings, validHours
     │   └── auth/               LoginPage, ChangePasswordPage
     ├── theme/                  purple-black-theme.css (Bootstrap overrides), palette.ts (chart colours)
     └── styles/layout.css       page layout (split view, narrow pages, toast position)
@@ -527,7 +529,7 @@ Real protection must be enforced by the API.
 | Route guard | `auth/RequireAuth.tsx` | Redirects to `/login` when there is no session, then returns the user to the page they wanted. |
 | Output escaping | React | All text rendered with `{…}` is escaped, which prevents script injection (XSS). |
 | Password rules | `features/auth/ChangePasswordPage.tsx` | Minimum 8 characters and confirmation match — repeated by the server. |
-| Temporary passwords | `auth/RequireAuth.tsx`, `features/auth/LoginPage.tsx` | A user signed in with a temporary password (new user or admin reset) is held on Change Password until they choose a new one. |
+| Temporary passwords | `auth/RequireAuth.tsx`, `features/auth/LoginPage.tsx`, `features/users/components/TemporaryPasswordNotice.tsx` | The server generates a random temporary password for new users and admin resets; the UI shows it once (Copy button) and never stores it. A user signed in with one is held on Change Password until they choose a new one; after the enterprise's validity period the API refuses it. |
 | Enterprise scoping | `features/users/useUsers.ts` | The Users page lists and creates users only in the signed-in user's enterprise (`useAuth().enterprisePk`). |
 | No hard-coded hosts | `api/client.ts` | Relative `/api` URLs; same origin in production, proxy in development. |
 

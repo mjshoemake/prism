@@ -21,16 +21,21 @@ src/main/java/com/prism/
 │   ├── CorsConfig.java              CORS: localhost:8080, "file://", "null"; credentials allowed
 │   ├── admin/
 │   │   ├── UsersController.java     /api/users CRUD; request DTOs are nested records
-│   │   ├── UsersService.java        Users SQL, auth, password change, lockout
-│   │   └── UserActionResult.java    record {success, message?, user?} (@JsonInclude NON_NULL)
+│   │   ├── UsersService.java        Users SQL, auth, password change, lockout, temp-password expiry
+│   │   ├── TemporaryPasswords.java  generate(): random xxxx-xxxx-xxxx temp password (no look-alike chars)
+│   │   └── UserActionResult.java    record {success, message?, user?, temporaryPassword?} (@JsonInclude NON_NULL;
+│   │                                toString masks the password)
 │   ├── auth/
 │   │   └── AuthController.java      /api/auth login + change-password
 │   ├── common/utils/
 │   │   └── SecurityUtils.java       BCrypt hash/verify, BCRYPT_COST = 12
-│   └── metrics/
-│       ├── SprintMetricsController.java   /api/metrics
-│       ├── SprintMetricsService.java      dynamic STAR-schema queries
-│       └── SprintMetricsRequest.java      record {focusLevelColumn, valueColumnsForSelectClause, whereClause}
+│   ├── metrics/
+│   │   ├── SprintMetricsController.java   /api/metrics
+│   │   ├── SprintMetricsService.java      dynamic STAR-schema queries
+│   │   └── SprintMetricsRequest.java      record {focusLevelColumn, valueColumnsForSelectClause, whereClause}
+│   └── settings/
+│       ├── SystemSettingsController.java  /api/settings (Admin → System Settings)
+│       └── SystemSettingsService.java     System_Settings read/upsert (temp_password_valid_hours, 1–720)
 └── common/
     ├── exceptions/
     │   ├── CoreException.java                   general unchecked wrapper (used by LogUtils)
@@ -53,6 +58,7 @@ src/main/resources/
 └── static/   BUILD OUTPUT of frontend/ (`npm run build`) — do not edit; git-ignored
 src/test/java/com/prism/api/
 ├── ApiApplicationTests.java         @SpringBootTest contextLoads
+├── admin/TemporaryPasswordsTests.java     plain JUnit (format, alphabet, randomness)
 └── common/utils/SecurityUtilsTests.java   plain JUnit, no Spring context
 src/test/java/com/prism/common/utils/LogUtilsTests.java   plain JUnit (records, masking, cycles, duration)
 ```
@@ -61,7 +67,7 @@ Example metrics request body: `Documentation/SprintMetricsExample.json`.
 
 ## Frontend (`REST/frontend/`)
 
-Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via react-chartjs-2; React Router (hash routes `/#/metrics`, `/#/users`, `/#/change-password`, `/#/login`). **Full layout and conventions: `frontend/README.md`** — read that instead of the source tree.
+Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via react-chartjs-2; React Router (hash routes `/#/metrics`, `/#/users`, `/#/settings`, `/#/change-password`, `/#/login`). **Full layout and conventions: `frontend/README.md`** — read that instead of the source tree.
 
 - `npm run dev` → :5173 with `/api` proxied to :8080. `npm run build` → empties and fills `src/main/resources/static/`; build the frontend before `mvn package`.
 - Only `src/api/*Api.ts` call fetch; state + data loading live in feature hooks (`useMetricsExplorer`, `useUsers`); toasts via `useToast`; session via `useAuth` (localStorage key `prism_auth`).
@@ -77,24 +83,29 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 | GET | `/api/metrics/focus-levels-list/{focusAreaPK}` | `fetchFocusLevels(int)` | pk bound as int (non-numeric → 400); ordered by `sort_order` = drill-down order |
 | GET | `/api/users?enterprisePk=N` | `listUsers(long)` | users of one enterprise (active + inactive; UI hides inactive by default). Enterprise comes from the request until auth exists (TODO #5) |
 | GET | `/api/users/{userId}` | `getUser()` → `Optional` | 404 if absent or not a UUID |
-| POST | `/api/users` | `createUser(enterprisePk, email, username, temporaryPassword)` | body `{enterprise_pk, email, username, temporaryPassword}`; `temporaryPassword` null → enterprise `temp_password_hash`. User starts with `is_temp_password = TRUE`. 400 `{success:false,message}` (bad input / no enterprise default), 409 duplicate email |
+| POST | `/api/users` | `createUser(enterprisePk, email, username)` | body `{enterprise_pk, email, username}`. Server generates the temporary password: 200 `{success, message, user, temporaryPassword}` (clear text, returned once, `Cache-Control: no-store`); user starts with `is_temp_password = TRUE`, `temp_password_expires_at = now() + valid hours`. 400 bad input / unknown enterprise, 409 duplicate email |
 | PUT | `/api/users/{userId}` | `updateUser(...)` | `isActive` null → unchanged (COALESCE); 204; 400 if id not a UUID (same for the other `{userId}` PUT/DELETE) |
 | PUT | `/api/users/{userId}/password` | `updatePassword()` | body `{password}`; 204 |
-| PUT | `/api/users/{userId}/reset-password` | `resetToTemporaryPassword()` | body `{temporaryPassword}` (null → enterprise default); sets `is_temp_password = TRUE`, clears lockout; 200/400 `UserActionResult` |
+| PUT | `/api/users/{userId}/reset-password` | `resetToTemporaryPassword(userId)` | no body. Generates a temporary password; sets `is_temp_password = TRUE` + expiry, clears lockout; 200 `{success, message, user, temporaryPassword}` (no-store) / 400 bad id or user not found |
 | DELETE | `/api/users/{userId}` | `deleteUser()` | 204. **Not used by the UI** — users are deactivated, never deleted (owner decision) |
-| POST | `/api/auth/login` | `authenticateUser(email, pw)` | 200 `{success:true,user}` / 401 `{success:false,message}` / 400 if fields empty |
-| POST | `/api/auth/change-password` | `changePassword(userId, cur, new)` | header `X-User-ID`; new pw ≥ 8 chars; 400 on failure |
+| GET | `/api/settings?enterprisePk=N` | `getSettings(long)` | `{enterprise_pk, temp_password_valid_hours, updated_at}`; 404 if no row |
+| PUT | `/api/settings` | `saveSettings(enterprisePk, hours)` | body `{enterprise_pk, temp_password_valid_hours}` (1–720), upserted; 200/400 `UserActionResult`; audit `SETTINGS_CHANGED` |
+| POST | `/api/auth/login` | `authenticateUser(email, pw)` | 200 `{success:true,user}` / 401 `{success:false,message}` (also when a correct temporary password has expired) / 400 if fields empty |
+| POST | `/api/auth/change-password` | `changePassword(userId, cur, new)` | header `X-User-ID`; new pw ≥ 8 chars; 400 on failure (incl. expired temporary password); clears `is_temp_password` and the expiry |
 
 ## Database objects referenced (schema `prism`)
 
 - **`Sprint_Metrics_Fact`** `smf` — joined to **`Sprint_Dim`** `sd` (`sprint_pk`) and **`Team_Dim`** `td` (`team_pk`). Columns seen in examples: `committed_story_points`, `committed_story_points_completed`, `year_month`, `year_quarter`, `level_2_name`.
 - **`Focus_Areas`** (`focus_area_pk` integer PK, `name`, `column_name` — unused so far, `sort_order`), **`Focus_Levels`** (`focus_level_pk` identity PK, `focus_area_pk` FK, `name`, `column_name`, `sort_order` — drill-down order; added by SQL/009). A focus level's `column_name` is what the UI sends as `focusLevelColumn`.
 - **`Metrics`** (`metric_pk`, `name`, `valuecolumnsforselectclause`, `fromclause`) — metric SQL pieces; seeded with Say/Do Ratio. **Not yet read by the Java code.**
-- **`Users`** (`user_id`, `enterprise_pk`, `email`, `username`, `password_hash`, `password_algo`, `password_params` jsonb, `password_updated_at`, `is_active`, `is_temp_password`, `failed_login_count`, `locked_until`, `last_login_at`, `created_at`, `updated_at`). Lockout: 5 failed logins → `locked_until = now() + 15 min`.
-- **`Enterprises`** (tenant) — `enterprise_pk`, `name`, `url`, `auth_token`, `temp_password_hash`. All prism tables use quoted CamelCase names (`"prism"."Users"`); quoted names are case-sensitive.
+- **`Users`** (`user_id`, `enterprise_pk`, `email`, `username` (optional; NULL when not given — the API stores blank as NULL, the UI shows the email), `password_hash`, `password_algo`, `password_params` jsonb, `password_updated_at`, `is_active`, `is_temp_password`, `temp_password_expires_at` (SQL/010; NULL once the user picks a password), `failed_login_count`, `locked_until`, `last_login_at`, `created_at`, `updated_at`). Lockout: 5 failed logins → `locked_until = now() + 15 min`.
+- **`Enterprises`** (tenant) — `enterprise_pk`, `name`, `url`, `auth_token`, `temp_password_hash` (**unused** — temporary passwords are generated per user; never store a shared default).
+- **`System_Settings`** — one row per enterprise: `enterprise_pk` (PK + FK → Enterprises, cascade delete), `temp_password_valid_hours` (default 72, CHECK 1–720), `created_at`, `updated_at`. A trigger on `Enterprises` creates the row for new enterprises (SQL/010).
+- All prism tables use quoted CamelCase names (`"prism"."Users"`); quoted names are case-sensitive.
+- **Explicit keys vs sequences:** inserting a row with an explicit key into a SERIAL/IDENTITY column does not advance its sequence (007 did this for Enterprises, 002/003 for Sprint_Dim/Team_Dim, Focus_Areas was seeded by hand). SQL/010 moves those sequences past the current max and ties `Focus_Areas_focus_area_pk_seq` to its column. Seed data should omit keys, or a script must `setval` afterwards.
 - **CITEXT gotcha:** the Postgres driver returns `citext` columns (`Users.email`, `Users.username`) as `PGobject`, which Jackson serializes as `{"type":"citext","value":…}`. Always select them as `email::text AS email`.
 - Confirmed types: `Users.user_id` **UUID**, `Users.email` CITEXT, `Enterprises.enterprise_pk` BIGSERIAL, `focus_area_pk` **integer**.
-- DDL lives in `~/Documents/Work/prism/SQL/` (001 star schema + Focus tables, 002–004 demo data, 005 Focus_Areas rebuild, 006 Enterprises, 007 Users, 008 Metrics + Focus_Levels data, 009 sort_order + Focus_Levels PK/FK). **The API requires 009 to have been run.**
+- DDL lives in `~/Documents/Work/prism/SQL/` (001 star schema + Focus tables, 002–004 demo data, 005 Focus_Areas rebuild, 006 Enterprises, 007 Users, 008 Metrics + Focus_Levels data, 009 sort_order + Focus_Levels PK/FK, 010 System_Settings + key-sequence realignment, 011 blank usernames → NULL). **The API requires 009 and 010 to have been run.**
 - **Target data model** (owner, Oct 2026): all metadata enterprise-scoped; Metric Groups parent Metrics and Focus Areas; opt-out exclusions per metric/focus area/level; `sort_order` on Focus_Areas/Levels; one metric group per dashboard; dashboards → tabs (≤4 charts) → shares; role-based write access to metadata.
 
 ## Conventions (agreed)

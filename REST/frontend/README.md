@@ -50,6 +50,7 @@ src/
 │   ├── types.ts             Shapes of the API's JSON
 │   ├── metricsApi.ts        /api/metrics/*
 │   ├── usersApi.ts          /api/users/*
+│   ├── settingsApi.ts       /api/settings
 │   └── authApi.ts           /api/auth/*
 ├── auth/                    Session state
 │   ├── AuthProvider.tsx     Holds the login response; persists it in localStorage ("prism_auth")
@@ -72,7 +73,8 @@ src/
 │   ├── users/
 │   │   ├── UsersPage.tsx
 │   │   ├── useUsers.ts              List + CRUD with toasts
-│   │   └── components/              UsersTable, UserRow, AddUserModal, EditUserModal, TemporaryPasswordFields
+│   │   └── components/              UsersTable, UserRow, AddUserModal, EditUserModal, TemporaryPasswordNotice
+│   ├── settings/                    SystemSettingsPage (Admin → System Settings), useSystemSettings, validHours
 │   └── auth/                        LoginPage, ChangePasswordPage
 ├── theme/
 │   ├── purple-black-theme.css       Bootstrap overrides (colours, cards, forms, dropdowns…)

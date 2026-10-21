@@ -6,6 +6,7 @@ import { ToastProvider } from './components/toast/ToastProvider';
 import { ChangePasswordPage } from './features/auth/ChangePasswordPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { MetricsPage } from './features/metrics/MetricsPage';
+import { SystemSettingsPage } from './features/settings/SystemSettingsPage';
 import { UsersPage } from './features/users/UsersPage';
 
 /**
@@ -23,6 +24,7 @@ export default function App() {
               <Route element={<RequireAuth />}>
                 <Route path="/metrics" element={<MetricsPage />} />
                 <Route path="/users" element={<UsersPage />} />
+                <Route path="/settings" element={<SystemSettingsPage />} />
                 <Route path="/change-password" element={<ChangePasswordPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/metrics" replace />} />

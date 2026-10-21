@@ -13,7 +13,6 @@ import org.slf4j.Logger;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 import com.prism.api.common.utils.SecurityUtils;
 import com.prism.common.logging.LogCategory;
@@ -28,12 +27,22 @@ public class UsersService {
     private static final String PASSWORD_ALGO = "bcrypt";
     private static final String PASSWORD_PARAMS = "{\"cost\":%d}".formatted(SecurityUtils.BCRYPT_COST);
     private static final String INVALID_CREDENTIALS = "Invalid email or password.";
+    private static final String TEMP_PASSWORD_EXPIRED =
+            "Your temporary password has expired. Ask an administrator to reset your password.";
+
+    /** Used when an enterprise has no System_Settings row (SQL/010 creates one for every enterprise). */
+    public static final int DEFAULT_TEMP_PASSWORD_VALID_HOURS = 72;
+
+    /** Expiry of a new temporary password: now + the enterprise's System_Settings.temp_password_valid_hours. */
+    private static final String TEMP_PASSWORD_EXPIRY_SQL = """
+            now() + make_interval(hours => COALESCE(
+                (SELECT s.temp_password_valid_hours FROM "prism"."System_Settings" s WHERE s.enterprise_pk = %s), %d))""";
 
     // email and username are CITEXT: the Postgres driver returns those as PGobject (serialized to JSON as
     // {"type":"citext","value":...}), so every query casts them to text.
     private static final String USER_COLUMNS = """
             user_id, enterprise_pk, email::text AS email, username::text AS username, is_active, is_temp_password, \
-            failed_login_count, locked_until, last_login_at, created_at, updated_at""";
+            temp_password_expires_at, failed_login_count, locked_until, last_login_at, created_at, updated_at""";
 
     private static final String LIST_USERS_SQL =
             "SELECT %s FROM \"prism\".\"Users\" WHERE enterprise_pk = ? ORDER BY created_at DESC".formatted(USER_COLUMNS);
@@ -41,49 +50,41 @@ public class UsersService {
     private static final String GET_USER_SQL =
             "SELECT %s FROM \"prism\".\"Users\" WHERE user_id = ?".formatted(USER_COLUMNS);
 
-    private static final String ENTERPRISE_TEMP_HASH_SQL = """
-            SELECT temp_password_hash FROM "prism"."Enterprises" WHERE enterprise_pk = ?""";
-
     private static final String INSERT_USER_SQL = """
-            INSERT INTO "prism"."Users" (enterprise_pk, email, username, password_hash, password_algo, password_params, is_temp_password)
-            VALUES (?, ?, ?, ?, ?, ?, TRUE)
-            RETURNING user_id, enterprise_pk, email::text AS email, username::text AS username, is_active, is_temp_password, created_at, updated_at
-            """;
+            INSERT INTO "prism"."Users" (enterprise_pk, email, username, password_hash, password_algo, password_params,
+                                         is_temp_password, temp_password_expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, TRUE, %s)
+            RETURNING %s
+            """.formatted(TEMP_PASSWORD_EXPIRY_SQL.formatted("?", DEFAULT_TEMP_PASSWORD_VALID_HOURS), USER_COLUMNS);
 
     private static final String UPDATE_USER_SQL = """
             UPDATE "prism"."Users" SET email = ?, username = ?, is_active = COALESCE(?, is_active) WHERE user_id = ?""";
 
     private static final String UPDATE_PASSWORD_SQL = """
             UPDATE "prism"."Users"
-            SET password_hash = ?, password_algo = ?, password_params = ?, password_updated_at = now(), is_temp_password = FALSE
-            WHERE user_id = ?
-            """;
-
-    /** Admin reset to a typed temporary password; also clears any lockout. */
-    private static final String RESET_TO_TEMP_PASSWORD_SQL = """
-            UPDATE "prism"."Users"
             SET password_hash = ?, password_algo = ?, password_params = ?, password_updated_at = now(),
-                is_temp_password = TRUE, failed_login_count = 0, locked_until = NULL
+                is_temp_password = FALSE, temp_password_expires_at = NULL
             WHERE user_id = ?
             """;
 
-    /** Admin reset to the enterprise's default temporary password (Enterprises.temp_password_hash). */
-    private static final String RESET_TO_ENTERPRISE_DEFAULT_SQL = """
+    /** Admin reset to a generated temporary password; also clears any lockout. */
+    private static final String RESET_TO_TEMP_PASSWORD_SQL = """
             UPDATE "prism"."Users" u
-            SET password_hash = e.temp_password_hash, password_algo = ?, password_params = ?,
-                password_updated_at = now(), is_temp_password = TRUE, failed_login_count = 0, locked_until = NULL
-            FROM "prism"."Enterprises" e
-            WHERE e.enterprise_pk = u.enterprise_pk
-              AND u.user_id = ?
-              AND COALESCE(e.temp_password_hash, '') <> ''
-            """;
+            SET password_hash = ?, password_algo = ?, password_params = ?, password_updated_at = now(),
+                is_temp_password = TRUE, temp_password_expires_at = %s,
+                failed_login_count = 0, locked_until = NULL
+            WHERE u.user_id = ?
+            RETURNING %s
+            """.formatted(TEMP_PASSWORD_EXPIRY_SQL.formatted("u.enterprise_pk", DEFAULT_TEMP_PASSWORD_VALID_HOURS),
+                          USER_COLUMNS);
 
     private static final String DELETE_USER_SQL = """
             DELETE FROM "prism"."Users" WHERE user_id = ?""";
 
     private static final String AUTHENTICATE_SQL = """
             SELECT user_id, enterprise_pk, email::text AS email, username::text AS username, password_hash, password_algo,
-                   is_active, is_temp_password, failed_login_count, locked_until, last_login_at
+                   is_active, is_temp_password, temp_password_expires_at, failed_login_count, locked_until,
+                   last_login_at
             FROM "prism"."Users"
             WHERE email = ? AND is_active = TRUE
             """;
@@ -105,7 +106,8 @@ public class UsersService {
             """;
 
     private static final String CURRENT_HASH_SQL = """
-            SELECT password_hash FROM "prism"."Users" WHERE user_id = ? AND is_active = TRUE""";
+            SELECT password_hash, is_temp_password, temp_password_expires_at
+            FROM "prism"."Users" WHERE user_id = ? AND is_active = TRUE""";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -136,40 +138,26 @@ public class UsersService {
     }
 
     /**
-     * Creates a user who must choose a new password at first login.
+     * Creates a user with a generated temporary password, which they must replace at first login. The
+     * password expires after the enterprise's System_Settings.temp_password_valid_hours.
      *
-     * @param temporaryPassword the initial temporary password, or {@code null} to use the enterprise's
-     *                          default temporary password
-     * @throws IllegalStateException with a user-facing message if the enterprise doesn't exist or has no
-     *                               default temporary password (and none was given)
+     * @return the created user and the temporary password in clear text (shown once to the administrator)
      * @throws org.springframework.dao.DuplicateKeyException if the email is already in use
+     * @throws org.springframework.dao.DataIntegrityViolationException if the enterprise doesn't exist
      */
-    public Map<String, Object> createUser(Long enterprisePk, String email, String username, String temporaryPassword) {
+    public UserActionResult createUser(Long enterprisePk, String email, String username) {
         log.debug("Started");
-        String passwordHash;
-        if (temporaryPassword != null) {
-            passwordHash = SecurityUtils.encryptPassword(temporaryPassword);
-        } else {
-            try {
-                passwordHash = jdbcTemplate.queryForObject(ENTERPRISE_TEMP_HASH_SQL, String.class, enterprisePk);
-            } catch (EmptyResultDataAccessException e) {
-                throw new IllegalStateException("Unknown enterprise.", e);
-            }
-            if (!StringUtils.hasLength(passwordHash)) {
-                throw new IllegalStateException(
-                        "No default temporary password is configured for this enterprise. Enter a temporary password instead.");
-            }
-        }
-        var created = jdbcTemplate.queryForMap(INSERT_USER_SQL,
-                enterprisePk, email, username, passwordHash, PASSWORD_ALGO, passwordParams());
-        audit.info("USER_CREATED userId={} email={} enterprisePk={} password={}", created.get("user_id"), email,
-                enterprisePk, temporaryPassword == null ? "enterprise-default" : "admin-entered");
-        return created;
+        var temporaryPassword = TemporaryPasswords.generate();
+        var created = jdbcTemplate.queryForMap(INSERT_USER_SQL, enterprisePk, email, blankToNull(username),
+                SecurityUtils.encryptPassword(temporaryPassword), PASSWORD_ALGO, passwordParams(), enterprisePk);
+        audit.info("USER_CREATED userId={} email={} enterprisePk={} tempPasswordExpiresAt={}", created.get("user_id"),
+                email, enterprisePk, created.get("temp_password_expires_at"));
+        return UserActionResult.withTemporaryPassword("User created.", created, temporaryPassword);
     }
 
     public int updateUser(String userId, String email, String username, Boolean isActive) {
         log.debug("Started");
-        int rows = jdbcTemplate.update(UPDATE_USER_SQL, email, username, isActive, parseUserId(userId));
+        int rows = jdbcTemplate.update(UPDATE_USER_SQL, email, blankToNull(username), isActive, parseUserId(userId));
         audit.info("USER_UPDATED userId={} email={} isActive={} rows={}", userId, email, isActive, rows);
         return rows;
     }
@@ -183,28 +171,23 @@ public class UsersService {
     }
 
     /**
-     * Resets a user's password to a temporary one that must be changed at the next login.
+     * Resets a user's password to a generated temporary password that must be changed at the next login, and
+     * clears any lockout. The password expires after the enterprise's System_Settings.temp_password_valid_hours.
      *
-     * @param temporaryPassword the new temporary password, or {@code null} to use the enterprise's
-     *                          default temporary password
+     * @return the updated user and the temporary password in clear text (shown once to the administrator)
      */
-    public UserActionResult resetToTemporaryPassword(String userId, String temporaryPassword) {
+    public UserActionResult resetToTemporaryPassword(String userId) {
         log.debug("Started");
-        var uuid = parseUserId(userId);
-        boolean useDefault = temporaryPassword == null;
-        int rows = useDefault
-                ? jdbcTemplate.update(RESET_TO_ENTERPRISE_DEFAULT_SQL, PASSWORD_ALGO, passwordParams(), uuid)
-                : jdbcTemplate.update(RESET_TO_TEMP_PASSWORD_SQL,
-                        SecurityUtils.encryptPassword(temporaryPassword), PASSWORD_ALGO, passwordParams(), uuid);
-        if (rows == 0) {
-            if (getUser(userId).isEmpty()) {
-                return UserActionResult.failed("User not found.");
-            }
-            return UserActionResult.failed(
-                    "No default temporary password is configured for this enterprise. Enter a temporary password instead.");
+        var temporaryPassword = TemporaryPasswords.generate();
+        var rows = jdbcTemplate.queryForList(RESET_TO_TEMP_PASSWORD_SQL,
+                SecurityUtils.encryptPassword(temporaryPassword), PASSWORD_ALGO, passwordParams(), parseUserId(userId));
+        if (rows.isEmpty()) {
+            return UserActionResult.failed("User not found.");
         }
-        audit.info("PASSWORD_RESET userId={} source={}", userId, useDefault ? "enterprise-default" : "admin-entered");
-        return UserActionResult.succeeded("Password reset. The user must choose a new password at next login.");
+        var user = rows.getFirst();
+        audit.info("PASSWORD_RESET userId={} tempPasswordExpiresAt={}", userId, user.get("temp_password_expires_at"));
+        return UserActionResult.withTemporaryPassword(
+                "Password reset. The user must choose a new password at next login.", user, temporaryPassword);
     }
 
     public int deleteUser(String userId) {
@@ -243,6 +226,12 @@ public class UsersService {
             return UserActionResult.failed(INVALID_CREDENTIALS);
         }
 
+        // Checked only after the password matched, so the response doesn't reveal account state to guessers.
+        if (isTemporaryPasswordExpired(user)) {
+            audit.info("LOGIN_REJECTED userId={} email={} reason=temp-password-expired", userId, email);
+            return UserActionResult.failed(TEMP_PASSWORD_EXPIRED);
+        }
+
         jdbcTemplate.update(RECORD_SUCCESSFUL_LOGIN_SQL, userId);
         audit.info("LOGIN_SUCCEEDED userId={} email={}", userId, email);
 
@@ -255,10 +244,15 @@ public class UsersService {
     public UserActionResult changePassword(String userId, String currentPassword, String newPassword) {
         log.debug("Started");
         try {
-            var currentHash = jdbcTemplate.queryForObject(CURRENT_HASH_SQL, String.class, parseUserId(userId));
-            if (!SecurityUtils.verifyPassword(currentPassword, currentHash)) {
+            var current = jdbcTemplate.queryForMap(CURRENT_HASH_SQL, parseUserId(userId));
+            if (!(current.get("password_hash") instanceof String currentHash)
+                    || !SecurityUtils.verifyPassword(currentPassword, currentHash)) {
                 audit.info("PASSWORD_CHANGE_FAILED userId={} reason=bad-current-password", userId);
                 return UserActionResult.failed("Current password is incorrect.");
+            }
+            if (isTemporaryPasswordExpired(current)) {
+                audit.info("PASSWORD_CHANGE_FAILED userId={} reason=temp-password-expired", userId);
+                return UserActionResult.failed(TEMP_PASSWORD_EXPIRED);
             }
             storePassword(userId, newPassword);
             audit.info("PASSWORD_CHANGED userId={}", userId);
@@ -311,6 +305,19 @@ public class UsersService {
             throw new IllegalStateException("Unable to build password_params JSON", e);
         }
         return jsonb;
+    }
+
+    /** Username is optional: a missing or blank one is stored as NULL (the UI then shows the email). */
+    private static String blankToNull(String value) {
+        log.debug("Started");
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /** True for a temporary password whose expiry has passed (no expiry recorded = not expired). */
+    private static boolean isTemporaryPasswordExpired(Map<String, Object> user) {
+        log.debug("Started");
+        var expiresAt = user.get("temp_password_expires_at");
+        return Boolean.TRUE.equals(user.get("is_temp_password")) && expiresAt != null && !isInFuture(expiresAt);
     }
 
     /** The Postgres driver returns timestamps as java.sql.Timestamp; OffsetDateTime is handled for safety. */

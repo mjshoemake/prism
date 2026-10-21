@@ -40,6 +40,8 @@ export interface User {
   is_active: boolean;
   /** True until the user replaces a temporary password; the UI forces a password change. */
   is_temp_password: boolean;
+  /** When the temporary password stops working; null once the user has chosen their own password. */
+  temp_password_expires_at: Timestamp | null;
   failed_login_count: number;
   locked_until: Timestamp | null;
   last_login_at: Timestamp | null;
@@ -50,9 +52,19 @@ export interface User {
 export interface CreateUserInput {
   enterprise_pk: number;
   email: string;
-  username: string;
-  /** null = use the enterprise's default temporary password. */
-  temporaryPassword: string | null;
+  /** null when not given (stored as NULL; the UI shows the email instead). */
+  username: string | null;
+}
+
+/**
+ * Response of creating a user or resetting a password: the user plus the generated temporary password,
+ * in clear text, shown once to the administrator. On failure: {success:false, message}.
+ */
+export interface TemporaryPasswordResult {
+  success: boolean;
+  message?: string;
+  user?: User;
+  temporaryPassword?: string;
 }
 
 export interface UpdateUserInput {
@@ -73,4 +85,14 @@ export interface AuthResult {
   success: boolean;
   message?: string;
   user?: AuthenticatedUser;
+}
+
+// ---- System settings ------------------------------------------------------
+
+/** Enterprise settings (GET /api/settings). */
+export interface SystemSettings {
+  enterprise_pk: number;
+  /** Hours a generated temporary password can be used to sign in. */
+  temp_password_valid_hours: number;
+  updated_at: Timestamp | null;
 }

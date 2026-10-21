@@ -1,5 +1,6 @@
 import type { User } from '../../../api/types';
 import { formatDateTime } from '../format';
+import { isTemporaryPasswordExpired } from '../temporaryPassword';
 import { displayName } from '../userList';
 
 interface UserRowProps {
@@ -23,7 +24,12 @@ export function UserRow({ user, isSelf, onSelect }: UserRowProps) {
         ) : (
           <span className="badge text-bg-secondary">Deactivated</span>
         )}
-        {user.is_temp_password && <span className="badge text-bg-warning ms-1">Temp password</span>}
+        {user.is_temp_password &&
+          (isTemporaryPasswordExpired(user) ? (
+            <span className="badge text-bg-danger ms-1">Temp password expired</span>
+          ) : (
+            <span className="badge text-bg-warning ms-1">Temp password</span>
+          ))}
       </td>
       <td>{formatDateTime(user.last_login_at)}</td>
       <td>{formatDateTime(user.created_at)}</td>

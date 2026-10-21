@@ -1,26 +1,31 @@
-export const MIN_PASSWORD_LENGTH = 8;
+import type { User } from '../../api/types';
+import { timestampValue } from './format';
 
-/** Choice made in <TemporaryPasswordFields>. */
-export interface TemporaryPasswordChoice {
-  /** 'default' = the enterprise's default temporary password; 'custom' = typed by the admin. */
-  mode: 'default' | 'custom';
-  password: string;
-  confirm: string;
+/** True when the user still has a temporary password and it has expired (they can't sign in). */
+export function isTemporaryPasswordExpired(user: User, now = Date.now()): boolean {
+  const expiresAt = timestampValue(user.temp_password_expires_at);
+  return user.is_temp_password && expiresAt > 0 && expiresAt <= now;
 }
 
-export const DEFAULT_TEMPORARY_PASSWORD: TemporaryPasswordChoice = { mode: 'default', password: '', confirm: '' };
-
-/** Validation message for the choice, or null when valid. */
-export function validateTemporaryPassword(choice: TemporaryPasswordChoice): string | null {
-  if (choice.mode === 'default') return null;
-  if (choice.password.length < MIN_PASSWORD_LENGTH) {
-    return `Temporary password must be at least ${MIN_PASSWORD_LENGTH} characters long.`;
+/**
+ * Copies text to the clipboard. The Clipboard API only exists on secure origins (https or localhost),
+ * so on plain http the text in `fallbackInput` is selected and copied the old way.
+ */
+export async function copyToClipboard(text: string, fallbackInput?: HTMLInputElement | null): Promise<boolean> {
+  if (window.isSecureContext && navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Permission denied: fall through to the selection-based copy.
+    }
   }
-  if (choice.password !== choice.confirm) return 'Temporary password and confirmation do not match.';
-  return null;
-}
-
-/** Value sent to the API: null means "use the enterprise default". */
-export function temporaryPasswordValue(choice: TemporaryPasswordChoice): string | null {
-  return choice.mode === 'custom' ? choice.password : null;
+  if (!fallbackInput) return false;
+  fallbackInput.focus();
+  fallbackInput.select();
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  }
 }

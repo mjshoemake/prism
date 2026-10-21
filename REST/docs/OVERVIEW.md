@@ -154,7 +154,8 @@ Static, reusable tables that describe each metric so the generic UI and API can 
 | `Metrics` | Per metric: name, value expression (`valuecolumnsforselectclause`) and FROM/JOIN clause (`fromclause`). *Not yet read by the API — the UI still sends the expression.* |
 | `Focus_Areas` | Slicing dimensions, ordered by `sort_order`. |
 | `Focus_Levels` | Levels within each area: display `name`, the dimension `column_name` to group/filter by, and `sort_order` (drill-down order). |
-| `Enterprises` | Tenants. Includes the client API `url`/`auth_token` and a temporary password hash for new users. |
+| `Enterprises` | Tenants. Includes the client API `url`/`auth_token`. |
+| `System_Settings` | One row per enterprise: enterprise-specific settings, currently how long a temporary password stays valid (default 72 hours). Edited under Admin → System Settings. |
 | `Users` | Login accounts (UUID `user_id`, bcrypt hash, lockout fields), each in an enterprise. |
 
 **Target (agreed direction, not yet built):**
@@ -221,7 +222,7 @@ That one change makes the API generic *and* closes the injection risk.
 
 | Area | Today | Target |
 |---|---|---|
-| Login | Email + password checked against a bcrypt hash; 5 failed attempts lock the account for 15 minutes. New users and admin resets get a **temporary password** (enterprise default or admin-entered) that must be changed at the next sign-in (UI-enforced). | Same, plus a real session or token issued by the server, which also enforces the password change. |
+| Login | Email + password checked against a bcrypt hash; 5 failed attempts lock the account for 15 minutes. New users and admin resets get a **randomly generated temporary password**, unique to the user, shown once to the admin (with Copy) and stored only as a hash. It expires after the enterprise's configured hours (default 72; enforced by the API at login), and must be changed at the next sign-in (UI-enforced). There is deliberately no shared default password: one known password would open every account that hasn't signed in yet (CWE-1393). | Same, plus a real session or token issued by the server, which also enforces the password change. |
 | API access | **Not authenticated.** Any caller can use every endpoint; the UI just hides pages when signed out. | Every request authenticated; enterprise and roles derived from the session. |
 | Authorization | None. | Roles (e.g. viewer, dashboard author, metrics admin, enterprise admin). |
 | Tenant isolation | User administration is scoped to the signed-in user's enterprise **in the UI only** (the API trusts the enterprise sent by the browser). | All metadata and data queries scoped to the user's enterprise by the server. Super-users can switch enterprise with a picker; lists never mix enterprises. |
@@ -238,7 +239,7 @@ The UI's own security rules are covered in the [UI developer guide](../frontend/
 | One metric (Say/Do Ratio) with drill-down across Time and Organization | **Working** |
 | Login, change password, forced change of temporary passwords | **Working** (API unauthenticated — see §6) |
 | User administration: list (deactivated hidden), add/edit in modals, deactivate (no delete), reset to temporary password | **Working** |
-| System Settings page (e.g. enterprise default temporary password) | Planned — today `Enterprises.temp_password_hash` is set directly in the database |
+| Generated temporary passwords with expiry; System Settings page (per enterprise: temporary password validity) | **Working** (SQL/010) |
 | Focus area / level ordering via `sort_order` | **Working** (SQL/009) |
 | API reads metric SQL from the `Metrics` table | Planned |
 | Metric Groups, exclusions, enterprise scoping | Planned (design agreed, tables not yet created) |

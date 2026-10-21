@@ -81,3 +81,16 @@ label.form-label {
   font-weight: 600;
   text-decoration: none;
 }
+
+/* ---- Temporary password notice (Add user / Reset password) ------------------ */
+
+.temp-password-value {
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+}
+
+/* ---- System Settings -------------------------------------------------------- */
+
+.settings-number {
+  max-width: 10rem;
+}

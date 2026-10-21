@@ -46,6 +46,11 @@ export function NavBar() {
                 </Link>
               </li>
               <li>
+                <Link className="dropdown-item" to="/settings">
+                  System Settings
+                </Link>
+              </li>
+              <li>
                 <Link className="dropdown-item" to="/change-password">
                   Change Password
                 </Link>

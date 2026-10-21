@@ -2,21 +2,16 @@ import { useState, type FormEvent } from 'react';
 import type { UpdateUserInput, User } from '../../../api/types';
 import { Modal } from '../../../components/Modal';
 import { formatDateTime, timestampValue } from '../format';
-import type { ActionOutcome } from '../useUsers';
-import {
-  DEFAULT_TEMPORARY_PASSWORD,
-  temporaryPasswordValue,
-  validateTemporaryPassword,
-  type TemporaryPasswordChoice,
-} from '../temporaryPassword';
-import { TemporaryPasswordFields } from './TemporaryPasswordFields';
+import { isTemporaryPasswordExpired } from '../temporaryPassword';
+import type { ActionOutcome, TemporaryPasswordOutcome } from '../useUsers';
+import { TemporaryPasswordNotice } from './TemporaryPasswordNotice';
 
 interface EditUserModalProps {
   user: User;
   /** True when editing your own account: deactivation is not allowed. */
   isSelf: boolean;
   onSave: (user: User, changes: UpdateUserInput) => Promise<ActionOutcome>;
-  onResetPassword: (user: User, temporaryPassword: string | null) => Promise<ActionOutcome>;
+  onResetPassword: (user: User) => Promise<TemporaryPasswordOutcome>;
   onClose: () => void;
 }
 
@@ -30,12 +25,16 @@ export function EditUserModal({ user, isSelf, onSave, onResetPassword, onClose }
   const [message, setMessage] = useState<string | null>(null);
 
   const [showReset, setShowReset] = useState(false);
-  const [resetChoice, setResetChoice] = useState<TemporaryPasswordChoice>(DEFAULT_TEMPORARY_PASSWORD);
   const [resetting, setResetting] = useState(false);
-  const [resetMessage, setResetMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  /** Generated password from the last reset, shown once. */
+  const [newPassword, setNewPassword] = useState<{ password: string; expiresAt: User['temp_password_expires_at'] } | null>(
+    null,
+  );
 
   const dirty = email !== (user.email ?? '') || username !== (user.username ?? '') || isActive !== user.is_active;
   const locked = timestampValue(user.locked_until) > Date.now();
+  const tempExpired = isTemporaryPasswordExpired(user);
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -55,21 +54,18 @@ export function EditUserModal({ user, isSelf, onSave, onResetPassword, onClose }
   };
 
   const handleReset = async () => {
-    const problem = validateTemporaryPassword(resetChoice);
-    if (problem) {
-      setResetMessage({ ok: false, text: problem });
-      return;
-    }
     setResetting(true);
     setResetMessage(null);
-    const outcome = await onResetPassword(user, temporaryPasswordValue(resetChoice));
+    const outcome = await onResetPassword(user);
     setResetting(false);
-    if (outcome.ok) {
+    if (outcome.ok && outcome.temporaryPassword) {
       setShowReset(false);
-      setResetChoice(DEFAULT_TEMPORARY_PASSWORD);
-      setResetMessage({ ok: true, text: outcome.message ?? 'Password reset.' });
+      setNewPassword({
+        password: outcome.temporaryPassword,
+        expiresAt: outcome.user?.temp_password_expires_at ?? null,
+      });
     } else {
-      setResetMessage({ ok: false, text: outcome.message ?? 'The password could not be reset.' });
+      setResetMessage(outcome.message ?? 'The password could not be reset.');
     }
   };
 
@@ -155,6 +151,15 @@ export function EditUserModal({ user, isSelf, onSave, onResetPassword, onClose }
         <dd className="col-sm-9">{formatDateTime(user.created_at)}</dd>
         <dt className="col-sm-3">Last sign-in</dt>
         <dd className="col-sm-9">{formatDateTime(user.last_login_at)}</dd>
+        {user.is_temp_password && (
+          <>
+            <dt className="col-sm-3">Temporary password</dt>
+            <dd className="col-sm-9">
+              {tempExpired ? 'Expired' : 'Valid until'} {formatDateTime(user.temp_password_expires_at)}
+              {tempExpired && ' (reset the password to issue a new one)'}
+            </dd>
+          </>
+        )}
         {locked && (
           <>
             <dt className="col-sm-3">Locked until</dt>
@@ -169,7 +174,12 @@ export function EditUserModal({ user, isSelf, onSave, onResetPassword, onClose }
         <div className="d-flex justify-content-between align-items-center">
           <h6 id="edit-user-password-heading" className="mb-0">
             Password{' '}
-            {user.is_temp_password && <span className="badge text-bg-warning ms-1">Temporary</span>}
+            {user.is_temp_password &&
+              (tempExpired ? (
+                <span className="badge text-bg-danger ms-1">Temporary — expired</span>
+              ) : (
+                <span className="badge text-bg-warning ms-1">Temporary</span>
+              ))}
           </h6>
           {!showReset && (
             <button
@@ -178,6 +188,7 @@ export function EditUserModal({ user, isSelf, onSave, onResetPassword, onClose }
               onClick={() => {
                 setShowReset(true);
                 setResetMessage(null);
+                setNewPassword(null);
               }}
               disabled={busy}
             >
@@ -187,19 +198,28 @@ export function EditUserModal({ user, isSelf, onSave, onResetPassword, onClose }
         </div>
 
         {resetMessage && (
-          <div className={`alert ${resetMessage.ok ? 'alert-success' : 'alert-warning'} mt-2 mb-0`} role="status">
-            {resetMessage.text}
+          <div className="alert alert-warning mt-2 mb-0" role="alert">
+            {resetMessage}
+          </div>
+        )}
+
+        {newPassword && (
+          <div className="mt-2">
+            <TemporaryPasswordNotice
+              idPrefix="reset-temp"
+              password={newPassword.password}
+              expiresAt={newPassword.expiresAt}
+              recipient={user.email}
+            />
           </div>
         )}
 
         {showReset && (
           <div className="border rounded p-3 mt-2">
-            <TemporaryPasswordFields
-              idPrefix="reset-temp"
-              value={resetChoice}
-              onChange={setResetChoice}
-              disabled={resetting}
-            />
+            <p className="mb-0">
+              Generate a new temporary password for {user.email}? Their current password stops working
+              immediately, and any lockout is cleared.
+            </p>
             <div className="d-flex justify-content-end gap-2 mt-3">
               <button
                 type="button"
