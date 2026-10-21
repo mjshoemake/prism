@@ -1,4 +1,4 @@
-import type { Filter } from '../filters';
+import { formatLabel, type Filter } from '../filters';
 
 interface ActiveFiltersProps {
   filters: Filter[];
@@ -18,11 +18,11 @@ export function ActiveFilters({ filters, onRemove, onClear }: ActiveFiltersProps
           <ul className="list-group mb-2">
             {filters.map((f, i) => (
               <li
-                key={`${f.column_name}=${f.value}`}
+                key={`${f.focus_level_pk}=${f.value ?? ''}`}
                 className="list-group-item d-flex justify-content-between align-items-center"
               >
                 <span>
-                  <strong>{f.name}:</strong> {f.value}
+                  <strong>{f.name}:</strong> {formatLabel(f.value)}
                 </span>
                 <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => onRemove(i)}>
                   Remove

@@ -159,14 +159,15 @@ This is Prism's core interaction. Files involved: `MetricBarChart.tsx` → `Char
 1. The user clicks the bar **"Sarah Williams"** while the focus level is **Director**.
 2. `MetricBarChart`'s Chart.js `onClick` finds the bar's label and calls `onBarClick("Sarah Williams")`.
 3. That prop is `explorer.drillDown`, from `useMetricsExplorer`. It:
-   - adds the filter `{ name: "Director", column_name: "level_2_name", value: "Sarah Williams" }`
+   - adds the filter `{ focus_level_pk: 10, name: "Director", value: "Sarah Williams" }`
      (or warns "Filter already exists");
    - moves `selectedLevel` to the **next level** in `focusLevels` (the API returns them in drill-down
      order, `sort_order`), or warns "No deeper level available";
    - remembers that level for this focus area, so switching areas and back returns to it.
 4. Because `selectedLevel` and `filters` changed, the hook's data effect re-runs:
-   `buildWhereClause(filters)` produces `WHERE level_2_name = 'Sarah Williams'` and
-   `metricsApi.getSprintMetrics(...)` posts it with the new level column.
+   `metricsApi.getChartData(...)` posts `{ metric_pk, focus_level_pk, filters }` — IDs and values only.
+   The server looks up the metric's calculation and the levels' columns in its metadata and binds
+   "Sarah Williams" as a query parameter.
 5. Rows arrive → `rows` state updates → the chart re-renders grouped by the new level. Any previous,
    still-running request was cancelled by the effect's `AbortController`.
 
@@ -212,7 +213,7 @@ frontend/
     │   ├── ErrorAlert.tsx
     │   └── LoadingSpinner.tsx
     ├── features/               ── one folder per screen/domain
-    │   ├── metrics/            MetricsPage, useMetricsExplorer, metricDefinitions, filters, components/
+    │   ├── metrics/            MetricsPage, useMetricsExplorer, useMetricList, metricFormat, filters, components/
     │   ├── users/              UsersPage, useUsers, userList (filter/sort), temporaryPassword, format,
     │   │                       components/ (UsersTable, UserRow, AddUserModal, EditUserModal, TemporaryPasswordNotice)
     │   ├── settings/           SystemSettingsPage (Admin → System Settings), useSystemSettings, validHours
@@ -430,24 +431,13 @@ empty state; normal state.
 
 ## 5. Other common tasks
 
-### Add a metric to the chart (today)
+### Add a metric to the chart
 
-Until the API reads metric definitions from the database, a metric is described in
-`src/features/metrics/metricDefinitions.ts`:
-
-```ts
-export const VELOCITY: MetricDefinition = {
-  key: 'Velocity',                 // SQL alias the API returns the value under
-  title: 'Velocity',
-  legendLabel: 'Story points per sprint',
-  max: undefined,                  // auto-scale
-  formatTick: (v) => `${v}`,
-  selectSql: 'ROUND(AVG(smf.story_points_completed), 1) as "Velocity"',
-};
-```
-
-Then pass it to `useMetricsExplorer` / `ChartPanel` in `MetricsPage.tsx`. This file goes away once
-metric metadata moves server-side (see the overview, §5) — don't build more on it than necessary.
+**Not a UI task.** The UI holds no metric-specific information: metrics are rows in the `Metrics` table
+(type, columns, title, unit, decimals, scale — see the [API guide](../../CLAUDE.md)), listed by
+`GET /api/metrics/list` and charted generically. A new row appears in the Metric picker within
+15 minutes (the server's metadata cache) or after a restart. Never add metric names, formulas or
+display rules to `src/`.
 
 ### Add a form
 
@@ -539,7 +529,6 @@ Real protection must be enforced by the API.
 |---|---|---|
 | The API has **no authentication**. | Anyone who can reach the server can call every endpoint; `RequireAuth` only hides pages. | API backlog #5 |
 | The session is just the stored login response — **no token**. | Editing `localStorage` "signs you in" to the UI; change-password trusts the `X-User-ID` header. | API backlog #5 |
-| The metrics page sends **SQL fragments** (`selectSql`, WHERE clause). | A crafted request can run arbitrary SQL. | API backlog #1; fix is in the overview §5 |
 | No roles. | Every signed-in user sees Admin → Users. | Target design |
 | Enterprise and temp-password rules are enforced only in the UI. | The API accepts any `enterprisePk` and doesn't block a user with a temporary password. | API backlog #5 |
 
@@ -554,7 +543,7 @@ rules below will need no changes beyond that.
 2. **Never render raw HTML.** No `dangerouslySetInnerHTML`; no building HTML strings. Render data as
    text in JSX.
 3. **Never send SQL or SQL-like strings from new code.** Send IDs and values; let the server build the
-   query from trusted metadata. (The existing metrics screen is the only exception, pending its fix.)
+   query from trusted metadata. The metrics screen is the model: it sends `{metric_pk, focus_level_pk, filters}`.
 4. **No secrets in the bundle.** Anything in `src/` ends up readable in the browser — API keys,
    passwords, tokens, internal URLs included. Configuration that must stay private belongs on the server.
 5. **All HTTP goes through `src/api/`.** One place to add authentication headers, error handling and

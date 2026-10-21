@@ -1,24 +1,27 @@
+import type { ChartFilter } from '../../api/types';
+
 /** A drill-down filter: "<focus level> = <value>", added by clicking a bar. */
 export interface Filter {
+  focus_level_pk: number;
   /** Display name of the focus level (e.g. "Team"). */
   name: string;
-  /** Column the filter applies to. */
-  column_name: string;
-  value: string;
+  /** The clicked bar's label; null for bars whose value is empty. */
+  value: string | null;
 }
 
-/**
- * Builds the WHERE clause sent to the API from the active filters
- * (single quotes in values are escaped by doubling them).
- */
-export function buildWhereClause(filters: readonly Filter[]): string {
-  if (filters.length === 0) {
-    return '';
-  }
-  const conditions = filters.map((f) => `${f.column_name} = '${f.value.replace(/'/g, "''")}'`);
-  return `WHERE ${conditions.join(' and ')}`;
+/** Shown for empty focus-level values (bars and filters). */
+export const BLANK_LABEL = '(blank)';
+
+/** Display text of a bar label or filter value. */
+export function formatLabel(value: string | number | null): string {
+  return value === null || value === '' ? BLANK_LABEL : String(value);
 }
 
-export function hasFilter(filters: readonly Filter[], columnName: string, value: string): boolean {
-  return filters.some((f) => f.column_name === columnName && f.value === value);
+/** The filters as sent to the API: IDs and values only. */
+export function toRequestFilters(filters: readonly Filter[]): ChartFilter[] {
+  return filters.map((f) => ({ focus_level_pk: f.focus_level_pk, operator: 'eq', value: f.value }));
+}
+
+export function hasFilter(filters: readonly Filter[], focusLevelPk: number, value: string | null): boolean {
+  return filters.some((f) => f.focus_level_pk === focusLevelPk && f.value === value);
 }

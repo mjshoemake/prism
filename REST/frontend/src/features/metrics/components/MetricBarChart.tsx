@@ -1,30 +1,33 @@
 import { BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, Tooltip, type ChartOptions } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
-import type { MetricRow } from '../../../api/types';
+import type { ChartRow, MetricInfo } from '../../../api/types';
 import { palette } from '../../../theme/palette';
-import type { MetricDefinition } from '../metricDefinitions';
+import { formatLabel } from '../filters';
+import { axisBounds, formatTick, formatValue, legendLabel } from '../metricFormat';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 interface MetricBarChartProps {
-  rows: MetricRow[];
-  /** Row key holding each bar's label (the focus level column). */
-  labelKey: string;
+  rows: ChartRow[];
   /** Focus level display name, used in the tooltip. */
   levelName: string;
-  metric: MetricDefinition;
-  onBarClick: (label: string) => void;
+  metric: MetricInfo;
+  /** Called with the clicked bar's raw label (null for an empty value). */
+  onBarClick: (label: string | null) => void;
 }
 
-export function MetricBarChart({ rows, labelKey, levelName, metric, onBarClick }: MetricBarChartProps) {
-  const labels = rows.map((row) => String(row[labelKey] || 'Unknown'));
-  const values = rows.map((row) => Number(row[metric.key]) || 0);
+/** Bar chart of one metric. Everything metric-specific (title, unit, decimals, scale) comes from `metric`. */
+export function MetricBarChart({ rows, levelName, metric, onBarClick }: MetricBarChartProps) {
+  const rawLabels = rows.map((row) => (row.label === null ? null : String(row.label)));
+  const labels = rows.map((row) => formatLabel(row.label));
+  // null = no value (e.g. 0 ÷ 0): no bar, rather than a misleading 0.
+  const values = rows.map((row) => (row.value === null ? null : Number(row.value)));
 
   const data = {
     labels,
     datasets: [
       {
-        label: metric.legendLabel,
+        label: legendLabel(metric),
         data: values,
         backgroundColor: palette.primaryLighter,
         borderColor: palette.primaryDark,
@@ -40,13 +43,13 @@ export function MetricBarChart({ rows, labelKey, levelName, metric, onBarClick }
     maintainAspectRatio: false,
     animation: false,
     onClick: (_event, elements) => {
-      const label = elements.length > 0 ? labels[elements[0].index] : undefined;
-      if (label) onBarClick(label);
+      if (elements.length > 0) onBarClick(rawLabels[elements[0].index]);
     },
     plugins: {
       legend: { labels: { color: palette.white, font: { size: 12 } } },
       tooltip: {
         callbacks: {
+          label: (item) => `${metric.title}: ${formatValue(metric, values[item.dataIndex])}`,
           afterBody: (items) => (items.length ? `Filter on: ${levelName} = ${items[0].label}` : ''),
         },
       },
@@ -54,8 +57,8 @@ export function MetricBarChart({ rows, labelKey, levelName, metric, onBarClick }
     scales: {
       y: {
         beginAtZero: true,
-        max: metric.max,
-        ticks: { color: palette.textMuted, callback: (value) => metric.formatTick(value) },
+        ...axisBounds(metric),
+        ticks: { color: palette.textMuted, callback: (value) => formatTick(metric, value) },
         grid: { color: palette.secondary },
       },
       x: {

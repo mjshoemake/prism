@@ -1,8 +1,8 @@
 # Prism REST API — Codebase Guide
 
-Quick orientation for anyone (human or Claude) working in `REST/`. Product context: `docs/OVERVIEW.md` (what Prism is, data model today vs target, security model, roadmap). UI how-to: `frontend/docs/DEVELOPER_GUIDE.md`. Read this before opening source files; most questions about structure, endpoints, and conventions are answered here.
+Quick orientation for anyone (human or Claude) working in `REST/`. **What to do next: `docs/ROADMAP.md`** (start each session there). Product context: `docs/OVERVIEW.md` (what Prism is, data model today vs target, security model, roadmap). UI how-to: `frontend/docs/DEVELOPER_GUIDE.md`. Read this before opening source files; most questions about structure, endpoints, and conventions are answered here.
 
-_Last updated: 2026-10-20, after the Groovy → Java migration, frontend restructure, logging categories and LogUtils._
+_Last updated: 2026-10-21, after metric types (SQL/012), generated temporary passwords and System Settings._
 
 ## Stack
 
@@ -30,9 +30,17 @@ src/main/java/com/prism/
 │   ├── common/utils/
 │   │   └── SecurityUtils.java       BCrypt hash/verify, BCRYPT_COST = 12
 │   ├── metrics/
-│   │   ├── SprintMetricsController.java   /api/metrics
-│   │   ├── SprintMetricsService.java      dynamic STAR-schema queries
-│   │   └── SprintMetricsRequest.java      record {focusLevelColumn, valueColumnsForSelectClause, whereClause}
+│   │   ├── SprintMetricsController.java   /api/metrics (list, data, focus areas/levels)
+│   │   ├── SprintMetricsService.java      chart data from IDs: resolves metadata, builds + runs the query
+│   │   ├── MetricsMetadataCache.java      in-memory Metrics + Focus_Levels; whole reload every
+│   │   │                                  prism.metadata.cache-ttl (15m); unknown ID → one reload (≤ every 10 s)
+│   │   ├── MetricQueryBuilder.java        SQL from metadata by metric type; filter values bound (Types.OTHER)
+│   │   ├── MetricType.java                percentage | ratio | average | sum (+ default scale)
+│   │   ├── MetricDefinition.java          cached Metrics row (holds SQL — never sent to the browser)
+│   │   ├── MetricInfo.java                API view of a metric (display fields only)
+│   │   ├── FocusLevelDefinition.java      cached Focus_Levels row
+│   │   ├── ChartDataRequest.java          {metric_pk, focus_level_pk, filters:[{focus_level_pk, operator, value}]}
+│   │   └── MetricQuery.java               {sql, parameters}
 │   └── settings/
 │       ├── SystemSettingsController.java  /api/settings (Admin → System Settings)
 │       └── SystemSettingsService.java     System_Settings read/upsert (temp_password_valid_hours, 1–720)
@@ -52,6 +60,7 @@ src/main/java/com/prism/
         │                            the level is off. Tests: src/test/.../common/utils/LogUtilsTests
         └── StringUtils.java         padding, dates, CSV, tokenizing helpers. NOTE: same simple name as
                                      org.springframework.util.StringUtils (used in controllers) — qualify one
+tools/parity/                        metric parity check: old vs new query path, exact comparison (README.md)
 src/main/resources/
 ├── application.properties           incl. per-category log levels (logging.level.<Category>)
 ├── logback-spring.xml               appenders: console; logs/audit.log + logs/perf.log (daily roll)
@@ -59,11 +68,12 @@ src/main/resources/
 src/test/java/com/prism/api/
 ├── ApiApplicationTests.java         @SpringBootTest contextLoads
 ├── admin/TemporaryPasswordsTests.java     plain JUnit (format, alphabet, randomness)
+├── metrics/MetricQueryBuilderTests.java   plain JUnit (SQL per type, row condition, bound filters, guards)
 └── common/utils/SecurityUtilsTests.java   plain JUnit, no Spring context
 src/test/java/com/prism/common/utils/LogUtilsTests.java   plain JUnit (records, masking, cycles, duration)
 ```
 
-Example metrics request body: `Documentation/SprintMetricsExample.json`.
+Example chart request body: `Documentation/SprintMetricsExample.json`.
 
 ## Frontend (`REST/frontend/`)
 
@@ -71,16 +81,17 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 
 - `npm run dev` → :5173 with `/api` proxied to :8080. `npm run build` → empties and fills `src/main/resources/static/`; build the frontend before `mvn package`.
 - Only `src/api/*Api.ts` call fetch; state + data loading live in feature hooks (`useMetricsExplorer`, `useUsers`); toasts via `useToast`; session via `useAuth` (localStorage key `prism_auth`).
-- Metric definitions (incl. the SQL `selectSql` fragment) are in `src/features/metrics/metricDefinitions.ts`; WHERE clause built in `filters.ts`.
+- **No metric-specific information in the UI.** Metrics come from `GET /api/metrics/list` (display fields only); chart requests carry only IDs and values (`filters.ts` → `toRequestFilters`). Value/axis formatting from the metric's unit, decimals and scale mode: `metricFormat.ts`.
 - Old single-file app and experiments: `frontend/prototypes/` (not built).
 
 ## Endpoints
 
 | Method | Path | Handler → Service | Notes |
 |---|---|---|---|
-| POST | `/api/metrics/sprint-metrics` | `fetchMetrics(focusLevelColumn, valueColumns, whereClause)` | Body = `SprintMetricsRequest`. Missing/empty field → `ResourceNotFoundException` (500). **Client sends raw SQL fragments.** |
+| GET | `/api/metrics/list` | `fetchMetricList()` | active metrics in `sort_order`: `{metric_pk, name, metric_type, title, unit, decimal_places, scale_mode, scale_min, scale_max}` — never SQL; `scale_mode` resolved (type default when NULL) |
+| POST | `/api/metrics/data` | `fetchChartData(ChartDataRequest)` | body `{metric_pk, focus_level_pk, filters:[{focus_level_pk, operator:"eq", value}]}` (value null = IS NULL; ≤ 25 filters). 200 `[{label, value}]` grouped/ordered by the level's column; 400 `{success:false,message}` for unknown IDs / operator. SQL built server-side from cached metadata (`MetricQueryBuilder`) |
 | GET | `/api/metrics/focus-areas-list` | `fetchFocusAreas()` | `Focus_Areas` ordered by `sort_order` |
-| GET | `/api/metrics/focus-levels-list/{focusAreaPK}` | `fetchFocusLevels(int)` | pk bound as int (non-numeric → 400); ordered by `sort_order` = drill-down order |
+| GET | `/api/metrics/focus-levels-list/{focusAreaPK}` | `fetchFocusLevels(int)` | `{focus_level_pk, focus_area_pk, name, column_name}`; pk bound as int (non-numeric → 400); ordered by `sort_order` = drill-down order |
 | GET | `/api/users?enterprisePk=N` | `listUsers(long)` | users of one enterprise (active + inactive; UI hides inactive by default). Enterprise comes from the request until auth exists (TODO #5) |
 | GET | `/api/users/{userId}` | `getUser()` → `Optional` | 404 if absent or not a UUID |
 | POST | `/api/users` | `createUser(enterprisePk, email, username)` | body `{enterprise_pk, email, username}`. Server generates the temporary password: 200 `{success, message, user, temporaryPassword}` (clear text, returned once, `Cache-Control: no-store`); user starts with `is_temp_password = TRUE`, `temp_password_expires_at = now() + valid hours`. 400 bad input / unknown enterprise, 409 duplicate email |
@@ -97,7 +108,7 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 
 - **`Sprint_Metrics_Fact`** `smf` — joined to **`Sprint_Dim`** `sd` (`sprint_pk`) and **`Team_Dim`** `td` (`team_pk`). Columns seen in examples: `committed_story_points`, `committed_story_points_completed`, `year_month`, `year_quarter`, `level_2_name`.
 - **`Focus_Areas`** (`focus_area_pk` integer PK, `name`, `column_name` — unused so far, `sort_order`), **`Focus_Levels`** (`focus_level_pk` identity PK, `focus_area_pk` FK, `name`, `column_name`, `sort_order` — drill-down order; added by SQL/009). A focus level's `column_name` is what the UI sends as `focusLevelColumn`.
-- **`Metrics`** (`metric_pk`, `name`, `valuecolumnsforselectclause`, `fromclause`) — metric SQL pieces; seeded with Say/Do Ratio. **Not yet read by the Java code.**
+- **`Metrics`** (SQL/012) — the only place a metric is defined: `metric_pk` (identity PK), `name` (unique), `metric_type` (`percentage`/`ratio`/`average`/`sum`), `numerator_sql` (value for average/sum), `denominator_sql` (percentage/ratio only), `row_condition_sql` (optional, → `FILTER (WHERE …)` on every aggregate), `title`, `unit`, `decimal_places`, `scale_mode` (NULL = type default; `zero_to_100`/`fit`/`fixed` + `scale_min`/`scale_max`), `sort_order`, `is_active`. Legacy `valuecolumnsforselectclause`/`fromclause` are unused. Seeded: Say/Do Ratio, Velocity (avg of `avg_velocity_3_sprints`), Scope Churn (added+removed ÷ GREATEST(committed, completed)), Estimate Changed, % Estimated (both ÷ `total_stories`). The FROM/JOIN is still the demo schema, hard-coded in `MetricQueryBuilder.DEMO_FROM_CLAUSE`.
 - **`Users`** (`user_id`, `enterprise_pk`, `email`, `username` (optional; NULL when not given — the API stores blank as NULL, the UI shows the email), `password_hash`, `password_algo`, `password_params` jsonb, `password_updated_at`, `is_active`, `is_temp_password`, `temp_password_expires_at` (SQL/010; NULL once the user picks a password), `failed_login_count`, `locked_until`, `last_login_at`, `created_at`, `updated_at`). Lockout: 5 failed logins → `locked_until = now() + 15 min`.
 - **`Enterprises`** (tenant) — `enterprise_pk`, `name`, `url`, `auth_token`, `temp_password_hash` (**unused** — temporary passwords are generated per user; never store a shared default).
 - **`System_Settings`** — one row per enterprise: `enterprise_pk` (PK + FK → Enterprises, cascade delete), `temp_password_valid_hours` (default 72, CHECK 1–720), `created_at`, `updated_at`. A trigger on `Enterprises` creates the row for new enterprises (SQL/010).
@@ -105,8 +116,8 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 - **Explicit keys vs sequences:** inserting a row with an explicit key into a SERIAL/IDENTITY column does not advance its sequence (007 did this for Enterprises, 002/003 for Sprint_Dim/Team_Dim, Focus_Areas was seeded by hand). SQL/010 moves those sequences past the current max and ties `Focus_Areas_focus_area_pk_seq` to its column. Seed data should omit keys, or a script must `setval` afterwards.
 - **CITEXT gotcha:** the Postgres driver returns `citext` columns (`Users.email`, `Users.username`) as `PGobject`, which Jackson serializes as `{"type":"citext","value":…}`. Always select them as `email::text AS email`.
 - Confirmed types: `Users.user_id` **UUID**, `Users.email` CITEXT, `Enterprises.enterprise_pk` BIGSERIAL, `focus_area_pk` **integer**.
-- DDL lives in `~/Documents/Work/prism/SQL/` (001 star schema + Focus tables, 002–004 demo data, 005 Focus_Areas rebuild, 006 Enterprises, 007 Users, 008 Metrics + Focus_Levels data, 009 sort_order + Focus_Levels PK/FK, 010 System_Settings + key-sequence realignment, 011 blank usernames → NULL). **The API requires 009 and 010 to have been run.**
-- **Target data model** (owner, Oct 2026): all metadata enterprise-scoped; Metric Groups parent Metrics and Focus Areas; opt-out exclusions per metric/focus area/level; `sort_order` on Focus_Areas/Levels; one metric group per dashboard; dashboards → tabs (≤4 charts) → shares; role-based write access to metadata.
+- DDL lives in `~/Documents/Work/prism/SQL/` (001 star schema + Focus tables, 002–004 demo data, 005 Focus_Areas rebuild, 006 Enterprises, 007 Users, 008 Metrics + Focus_Levels data, 009 sort_order + Focus_Levels PK/FK, 010 System_Settings + key-sequence realignment, 011 blank usernames → NULL, 012 metric types + 5 demo metrics). **The API requires 009, 010 and 012 to have been run.**
+- **Target data model** (owner, Oct 2026; `docs/OVERVIEW.md` §4.2–4.3): all metadata enterprise-scoped; data sources → fact tables + shared dimension tables (fact–dimension links); metrics belong to a fact table; focus areas are defined on dimensions, focus levels are dimension columns; **no Metric Groups** (the fact table plays that role; add later only if needed); opt-out exclusions per metric/focus area/level; dashboards may mix fact tables but offer only focus areas common to all their charts; dashboards → tabs (≤4 charts) → shares; role-based write access to metadata.
 
 ## Conventions (agreed)
 
@@ -118,11 +129,12 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 - Groovy-truthiness was preserved as `StringUtils.hasLength(...)` (null/"" rejected, whitespace accepted) and `== null || == 0` for numbers.
 - Behaviour changes that aren't strictly required are flagged with `TODO` comments and handled as separate changes.
 - **Metric data: store numerator and denominator columns, never percentages.** Ratios are computed in the metric's SELECT as `SUM(numerator) / SUM(denominator)` so they stay correct at every drill-down level (averaging stored percentages = average of averages). See `docs/OVERVIEW.md` §4.1.
+- **Calculations must stay exactly right.** Any change that could affect how metric values are calculated (query builder, metric types, metadata, filters) must be proven identical before it ships: run every metric × focus level × filter combination through the old and new paths against the same data and compare exact values (as done for SQL/012: 24,160 cases, 120,580 rows, 0 differences; a deliberate rounding change was detected in 11,792 cases), plus hand-checked expected values for edge cases. A permanent version of this harness is planned with the fact/dimension work.
 - **Database changes = new migration scripts only.** Add the next numbered file in `prism/SQL/` (`NNN-short_description.sql`, e.g. `009-focus_level_sort_order.sql`). Scripts must be **re-runnable** (`IF NOT EXISTS`, `DO $$ … IF NOT EXISTS … $$`, `ON CONFLICT DO NOTHING`, no unguarded `DROP`). Existing scripts are historical: they may be corrected for accuracy, but they are **not re-executed**, so any fix that must reach the live database needs its own new script. Use quoted CamelCase table names (`"prism"."Focus_Levels"`).
 
 ## Open issues / backlog
 
-1. **SQL injection — `/sprint-metrics`**: select columns and full WHERE clause come from the client. Needs a design change (owner to provide design detail). Partial mitigation idea: whitelist `focusLevelColumn` against `Focus_Levels.column_name`.
+1. **SQL injection — metrics** — **closed for the client side (Oct 2026, SQL/012):** `/sprint-metrics` was removed; the UI sends only IDs and values to `/api/metrics/data`, and the server builds every query from cached metadata with bound filter values. Remaining: metric expressions in `Metrics` are trusted SQL (only a `;`/comment guard until the parser exists), and the FROM clause is hard-coded. **Design agreed Oct 2026** (`docs/OVERVIEW.md` §4.3, §6): client sends only IDs/values `{metric_pk, focus_level_pk, filters:[{focus_level_pk, operator:"eq", value}]}`; server builds all SQL from metadata cached in memory (whole cache reloaded every 15 min, configurable; unknown IDs → 400), binds values, later runs on a read-only data-source login. Planned order: (a) ✅ metric types in `Metrics`, cache, ID-based endpoint, UI metric list — next: data-source/fact/dimension/link tables + focus levels pointing at them, drill pointer `drill_to_focus_level_pk` (feature branch, with the parity harness); (b) read-only connection; (c) admin screens with parse-based validation (JSqlParser allow-list), Test, Preview; (d) schema reading; (e) calculation templates.
 2. ~~SQL injection — `fetchFocusLevels`~~ **fixed Oct 2026** (bound int parameter).
 3. **400 vs 500**: missing request fields throw `ResourceNotFoundException`/`ParameterValueRequiredException` with no `@ControllerAdvice`, so clients get 500. Add a handler returning 400 (and rename the exception for missing params).
 4. ~~`user_id` binding bug~~ **fixed Oct 2026** (all user queries bind a `UUID`; malformed IDs → 400/404).

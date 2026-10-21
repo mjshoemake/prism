@@ -1,23 +1,22 @@
-import type { FocusLevel, MetricRow } from '../../../api/types';
+import type { ChartRow, FocusLevel, MetricInfo } from '../../../api/types';
 import { ErrorAlert } from '../../../components/ErrorAlert';
 import { LoadingSpinner } from '../../../components/LoadingSpinner';
-import type { MetricDefinition } from '../metricDefinitions';
 import { MetricBarChart } from './MetricBarChart';
 
 interface ChartPanelProps {
-  metric: MetricDefinition;
+  metric: MetricInfo | null;
   selectedLevel: FocusLevel | null;
-  rows: MetricRow[];
+  rows: ChartRow[];
   loading: boolean;
   error: string | null;
-  onBarClick: (label: string) => void;
+  onBarClick: (label: string | null) => void;
 }
 
 export function ChartPanel({ metric, selectedLevel, rows, loading, error, onBarClick }: ChartPanelProps) {
   const renderBody = () => {
     if (error) return <ErrorAlert message={error} />;
     if (loading) return <LoadingSpinner caption="Loading chart data..." />;
-    if (rows.length === 0 || !selectedLevel) {
+    if (rows.length === 0 || !selectedLevel || !metric) {
       return (
         <div className="text-center py-5">
           <i className="fas fa-chart-bar fa-3x text-muted mb-3" />
@@ -29,7 +28,6 @@ export function ChartPanel({ metric, selectedLevel, rows, loading, error, onBarC
       <div className="h-100">
         <MetricBarChart
           rows={rows}
-          labelKey={selectedLevel.column_name}
           levelName={selectedLevel.name}
           metric={metric}
           onBarClick={onBarClick}
@@ -44,7 +42,7 @@ export function ChartPanel({ metric, selectedLevel, rows, loading, error, onBarC
         <div className="card-header">
           <h5 className="mb-0">
             <i className="fas fa-chart-bar me-2" />
-            {metric.title} by {selectedLevel?.name ?? 'Focus Level'}
+            {metric?.title ?? 'Metric'} by {selectedLevel?.name ?? 'Focus Level'}
           </h5>
         </div>
         <div className="card-body chart-card-body">{renderBody()}</div>

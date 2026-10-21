@@ -66,9 +66,10 @@ src/
 ├── features/                One folder per screen/domain
 │   ├── metrics/
 │   │   ├── MetricsPage.tsx          Page: sidebar + chart
-│   │   ├── useMetricsExplorer.ts    All drill-down state and data loading
-│   │   ├── metricDefinitions.ts     Metrics that can be charted (Say/Do Ratio)
-│   │   ├── filters.ts               Filter type + WHERE-clause builder
+│   │   ├── useMetricsExplorer.ts    All drill-down state and data loading (requests by IDs only)
+│   │   ├── useMetricList.ts         Metrics from GET /api/metrics/list + the selected one
+│   │   ├── metricFormat.ts          Value/tick/legend formatting and y-axis bounds from the metric's metadata
+│   │   ├── filters.ts               Filter type, (blank) label, request filters
 │   │   └── components/              SelectionsPanel, ActiveFilters, ChartPanel, MetricBarChart
 │   ├── users/
 │   │   ├── UsersPage.tsx
@@ -93,16 +94,15 @@ prototypes/                          Old experiments, not built (see prototypes/
 
 ## How the metrics drill-down works
 
-1. Load focus areas; select the first.
+1. Load the metrics (`GET /api/metrics/list`); select the first. Load focus areas; select the first.
 2. Load that area's focus levels; select the level last used in that area, else the first.
-3. Query `/api/metrics/sprint-metrics` grouped by the selected level's `column_name`, with a WHERE clause built from the active filters.
-4. Clicking a bar adds the filter `<level> = <bar label>` and moves to the next level. Changing the level or the filters re-runs step 3.
+3. `POST /api/metrics/data` with `{metric_pk, focus_level_pk, filters}` — IDs and values only. Rows come back as `[{label, value}]`.
+4. Clicking a bar adds the filter `<level> = <bar label>` and moves to the next level. Changing the metric, the level or the filters re-runs step 3. Filters are kept when the metric or the area changes.
 
 ### Adding a metric
 
-Add a `MetricDefinition` to `features/metrics/metricDefinitions.ts` (SQL alias `key`, `title`, `legendLabel`, axis `max`, tick formatter, and the `selectSql` fragment), then pass it to `useMetricsExplorer` / `ChartPanel` in `MetricsPage.tsx`.
+No UI change: insert a row into the `Metrics` table (type, columns, title, unit, decimals, scale — see `REST/CLAUDE.md`). It appears in the Metric picker within 15 minutes (the server's metadata cache) or after a restart.
 
 ## Known issues / TODO
 
-- The client sends SQL fragments (`selectSql`, WHERE clause) to the API — see backlog in `REST/CLAUDE.md`.
 - No real authentication: the session is just the stored login response.

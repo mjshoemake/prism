@@ -11,21 +11,50 @@ export interface FocusArea {
 }
 
 export interface FocusLevel {
+  focus_level_pk: number;
   focus_area_pk: number;
   name: string;
-  /** Column of the STAR schema this level groups by (e.g. "year_month"). */
+  /** Column of the STAR schema this level groups by (e.g. "year_month"). Informational: requests use the pk. */
   column_name: string;
 }
 
-/** Body of POST /api/metrics/sprint-metrics. */
-export interface SprintMetricsRequest {
-  focusLevelColumn: string;
-  valueColumnsForSelectClause: string;
-  whereClause: string;
+/**
+ * A metric as the API describes it (GET /api/metrics/list). Display information only: how it is calculated stays
+ * on the server, in the Metrics table.
+ */
+export interface MetricInfo {
+  metric_pk: number;
+  name: string;
+  metric_type: 'percentage' | 'ratio' | 'average' | 'sum';
+  title: string;
+  /** e.g. "%" or "points"; null for none. */
+  unit: string | null;
+  decimal_places: number;
+  /** Y-axis default: 0–100 (extends above 100 when needed), fitted to the data, or fixed bounds. */
+  scale_mode: 'zero_to_100' | 'fit' | 'fixed';
+  scale_min: number | null;
+  scale_max: number | null;
 }
 
-/** One result row: the focus-level column plus one column per metric (keyed by SQL alias). */
-export type MetricRow = Record<string, string | number | null>;
+/** A drill-down filter in a chart request: "focus level = value" (null matches empty values). */
+export interface ChartFilter {
+  focus_level_pk: number;
+  operator: 'eq';
+  value: string | null;
+}
+
+/** Body of POST /api/metrics/data: IDs and values only, never SQL. */
+export interface ChartDataRequest {
+  metric_pk: number;
+  focus_level_pk: number;
+  filters: ChartFilter[];
+}
+
+/** One bar: the focus-level value and the metric's value (null when it can't be calculated, e.g. 0 ÷ 0). */
+export interface ChartRow {
+  label: string | number | null;
+  value: number | null;
+}
 
 // ---- Users ----------------------------------------------------------------
 

@@ -5,7 +5,6 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,7 +12,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.prism.common.exceptions.ResourceNotFoundException;
 import com.prism.common.logging.LogCategory;
 import com.prism.common.logging.PerformanceLog;
 
@@ -29,27 +27,28 @@ public class SprintMetricsController {
         this.svc = svc;
     }
 
-    @PostMapping("/sprint-metrics")
-    public ResponseEntity<List<Map<String, Object>>> getSprintMetrics(@RequestBody SprintMetricsRequest request) {
+    /** Active metrics in display order: display fields only (title, unit, decimals, scale), never SQL. */
+    @GetMapping("/list")
+    public ResponseEntity<List<MetricInfo>> getMetricList() {
         log.debug("Started");
-        return PerformanceLog.time("SprintMetricsController.getSprintMetrics", () -> {
-            // StringUtils.hasLength mirrors Groovy truthiness for Strings: null and "" are rejected, "  " is not.
-            // TODO: these should be 400 Bad Request rather than ResourceNotFoundException (currently surfaces as 500).
-            if (!StringUtils.hasLength(request.focusLevelColumn())) {
-                throw new ResourceNotFoundException("FocusLevelColumn not specified.");
-            }
-            if (!StringUtils.hasLength(request.valueColumnsForSelectClause())) {
-                throw new ResourceNotFoundException("ValueColumnsForSelectClause not specified.");
-            }
-            if (request.whereClause() == null) {
-                throw new ResourceNotFoundException("WhereClause not specified.");
-            }
+        return PerformanceLog.time("SprintMetricsController.getMetricList",
+                () -> ResponseEntity.ok(svc.fetchMetricList()));
+    }
 
-            var rows = svc.fetchMetrics(
-                    request.focusLevelColumn(),
-                    request.valueColumnsForSelectClause(),
-                    request.whereClause());
-            return ResponseEntity.ok(rows);
+    /**
+     * Chart rows {@code [{label, value}, ...]}. The body holds only IDs and values ({@link ChartDataRequest}); the
+     * server builds the SQL from metadata. 400 {success:false, message} for an unknown metric or focus level, an
+     * unsupported operator, or too many filters.
+     */
+    @PostMapping("/data")
+    public ResponseEntity<Object> getChartData(@RequestBody ChartDataRequest request) {
+        log.debug("Started");
+        return PerformanceLog.time("SprintMetricsController.getChartData", () -> {
+            try {
+                return ResponseEntity.ok(svc.fetchChartData(request));
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+            }
         });
     }
 

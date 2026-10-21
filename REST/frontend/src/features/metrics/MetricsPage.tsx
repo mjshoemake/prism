@@ -1,33 +1,36 @@
 import { ChartPanel } from './components/ChartPanel';
 import { SelectionsPanel } from './components/SelectionsPanel';
-import { SAY_DO_RATIO } from './metricDefinitions';
+import { useMetricList } from './useMetricList';
 import { useMetricsExplorer } from './useMetricsExplorer';
 
-const metric = SAY_DO_RATIO;
-
+/** Metric picker + drill-down explorer. Everything about a metric comes from the API (Metrics table). */
 export function MetricsPage() {
-  const explorer = useMetricsExplorer(metric);
+  const metricList = useMetricList();
+  const explorer = useMetricsExplorer(metricList.selectedMetric);
 
   return (
     <div className="metrics-page">
       <SelectionsPanel
+        metrics={metricList.metrics}
+        selectedMetric={metricList.selectedMetric}
+        onSelectMetric={metricList.selectMetric}
         focusAreas={explorer.focusAreas}
         focusLevels={explorer.focusLevels}
         selectedArea={explorer.selectedArea}
         selectedLevel={explorer.selectedLevel}
         filters={explorer.filters}
-        loading={explorer.loading}
-        error={explorer.error}
+        loading={explorer.loading || metricList.loading}
+        error={metricList.error ?? explorer.error}
         onSelectArea={explorer.selectArea}
         onSelectLevel={explorer.selectLevel}
         onRemoveFilter={explorer.removeFilter}
         onClearFilters={explorer.clearFilters}
       />
       <ChartPanel
-        metric={metric}
+        metric={metricList.selectedMetric}
         selectedLevel={explorer.selectedLevel}
         rows={explorer.rows}
-        loading={explorer.loading}
+        loading={explorer.loading || metricList.loading}
         error={explorer.chartError}
         onBarClick={explorer.drillDown}
       />

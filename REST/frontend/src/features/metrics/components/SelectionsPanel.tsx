@@ -1,10 +1,13 @@
-import type { FocusArea, FocusLevel } from '../../../api/types';
+import type { FocusArea, FocusLevel, MetricInfo } from '../../../api/types';
 import { DropdownSelect } from '../../../components/DropdownSelect';
 import { ErrorAlert } from '../../../components/ErrorAlert';
 import type { Filter } from '../filters';
 import { ActiveFilters } from './ActiveFilters';
 
 interface SelectionsPanelProps {
+  metrics: MetricInfo[];
+  selectedMetric: MetricInfo | null;
+  onSelectMetric: (metric: MetricInfo) => void;
   focusAreas: FocusArea[];
   focusLevels: FocusLevel[];
   selectedArea: FocusArea | null;
@@ -19,6 +22,9 @@ interface SelectionsPanelProps {
 }
 
 export function SelectionsPanel({
+  metrics,
+  selectedMetric,
+  onSelectMetric,
   focusAreas,
   focusLevels,
   selectedArea,
@@ -34,6 +40,20 @@ export function SelectionsPanel({
   return (
     <aside className="metrics-sidebar">
       <h2 className="section-title">Selections</h2>
+
+      <div className="mb-3">
+        <DropdownSelect
+          id="metricDropdown"
+          label="Metric"
+          placeholder="Select Metric"
+          items={metrics}
+          selected={selectedMetric}
+          getKey={(m) => m.metric_pk}
+          getLabel={(m) => m.title}
+          onSelect={onSelectMetric}
+          disabled={loading || metrics.length === 0}
+        />
+      </div>
 
       <div className="mb-3">
         <DropdownSelect
@@ -56,7 +76,7 @@ export function SelectionsPanel({
           placeholder="Select Focus Level"
           items={focusLevels}
           selected={selectedLevel}
-          getKey={(l) => l.column_name}
+          getKey={(l) => l.focus_level_pk}
           getLabel={(l) => l.name}
           onSelect={onSelectLevel}
           disabled={loading || !selectedLevel}
