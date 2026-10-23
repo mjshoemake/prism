@@ -1,70 +1,123 @@
 # Metric parity check
 
-Proves that a change to how metrics are calculated gives **identical results**: every metric × focus level ×
-filter combination is run through an "old" path and the "new" path against the same database, and the results
-are compared exactly (labels, order, values as text). First used for SQL/012 (Oct 2026): 24,160 cases,
-120,580 rows, 0 differences; a deliberate rounding change was detected in 11,792 cases.
+Proves that a change to how metrics are calculated gives **identical results**. Required before any change that
+could affect metric values ships (CLAUDE.md, "Calculations must stay exactly right").
 
-- **Old path** (`parity.py`): the pre-SQL/012 query template, with the old UI's WHERE clause (quotes doubled).
-  Say/Do uses the old UI's expression verbatim; the other metrics use hand-written SQL, independent of the builder.
-- **New path** (`Gen.java`): `MetricQueryBuilder` with the metric rows as seeded by SQL/012, written as
-  `PREPARE … EXECUTE` with untyped parameters (Postgres infers types, like the JDBC `Types.OTHER` binding).
-- **Cases:** no filter; every single filter value on every level; drill-down paths (each bar, next `sort_order`
-  level, 3 deep for Say/Do, 2 for others); 300 seeded random 2–3-filter combinations per metric; an apostrophe value.
+`MetricParityTests` (`src/test/java/com/prism/api/metrics/`) sends chart requests through the real
+`SprintMetricsService`: the same metadata cache, query builder and JDBC binding (`Types.OTHER`) the API uses, with
+metric and focus-level definitions read from the database (nothing hand-copied). Results are compared as text
+(labels, order, values with their decimals). It runs three checks:
 
-## Run (needs the demo data, SQL 001–012, and compiled classes)
+| Check | Database | Compared with |
+|---|---|---|
+| **Hand-checked dataset**: 15 edge cases with answers worked out by hand (below) | `prism_fixture`, rebuilt each run by `fixture/fixture.sh` | `fixture/expected.tsv` |
+| **Demo data**: every metric × focus level × filter combination (~23,500 cases, ~118,000 rows) | `playpen` | `baseline/demo-baseline.txt` (frozen) |
+| **Check the check**: a plausible wrong calculation must be reported as different, for every metric | both | the two above |
+
+## Run
 
 ```bash
-cd REST && ./mvnw -q compile                     # target/classes
-cd tools/parity
-export PRISM_PSQL="psql -h localhost -p 5432 -U postgres -d playpen"   # PGPASSWORD=… if needed
-python3 parity.py                                # writes levels.tsv, cases.tsv, old.sql
-javac -cp ../../target/classes -d . Gen.java && java -cp ../../target/classes:. Gen   # writes new.sql
-$PRISM_PSQL -At -q -F '|' -v ON_ERROR_STOP=1 -f old.sql > old.out
-$PRISM_PSQL -At -q -F '|' -v ON_ERROR_STOP=1 -f new.sql > new.out
-python3 cmp.py old.out new.out                   # "differing cases 0" = identical
+cd ~/Documents/Work/prism/REST
+PGPASSWORD=… bash tools/parity/run.sh            # compare (about 30 s plus the Maven build)
+PGPASSWORD=… bash tools/parity/run.sh --freeze   # write a new baseline
 ```
 
-**Check the check:** edit `new.sql` (e.g. `sed 's/\* 100, 2)/* 100, 1)/' new.sql > mut.sql`), run it the same way,
-and confirm `cmp.py old.out mut.out` reports differences. Always run old, new and mutated output with the
-**same psql flags**, or the comparison is meaningless.
+`run.sh` rebuilds the fixture database with `psql` (taken from the PATH, else from Postgres.app or pgAdmin;
+or set `PRISM_PSQL_BASE="/path/to/psql -h localhost -p 5432 -U postgres"`), then runs
+`mvn test -Dtest=MetricParityTests -Dprism.parity=true`. Normal builds skip the test (it needs live databases).
+Connection: `spring.datasource.*` from `application.properties`. The fixture database is the same URL with
+`prism_fixture` as the database name. Override with `-Dprism.parity.url=…`, `-Dprism.parity.fixture-url=…`,
+`-Dprism.parity.username=…`, `-Dprism.parity.password=…`; `fixture.sh` takes `PRISM_PSQL_BASE` and `FIXTURE_DB`.
 
-When the old path is retired (fact/dimension work), freeze `new.out` as the baseline and compare future
-changes against it. Generated files (`*.tsv`, `*.sql`, `*.out`) are not meant to be committed.
+On failure the report lists the first differing cases (expected vs actual). Full results are written to
+`target/parity/demo-actual.txt` and `target/parity/fixture-actual.txt`, which can be diffed against the baseline.
 
-## Notes and limitations (read before reusing)
+## When to freeze a baseline
 
-- **Metric definitions are duplicated** in two places, and both must match the `Metrics` table:
-  - `Gen.java` (new path) holds the rows exactly as seeded by SQL/012;
-  - `parity.py` (`OLD` dict) holds the hand-written "old" expressions.
+The baseline is the accepted answer for the demo data, so it is frozen **only on the owner's machine** (the
+order of text labels depends on the database's collation) and only when results are known to be right:
 
-  If a metric is added or changed, update both, or make `Gen.java` read the rows from the database.
-  `parity.py` reads focus levels and their distinct values from the database, so those are always current.
-- **Drill paths follow `sort_order`** (the next level within the area), as the UI did before drill pointers.
-  When `drill_to_focus_level_pk` exists, change `next_level` in `parity.py` to follow it.
-- **NULL labels aren't covered:** the demo data has no NULLs in any focus-level column.
-  - The old UI showed a NULL as "Unknown" and filtered on the text `'Unknown'`, which matched nothing (a bug).
-  - The new path filters with `IS NULL`.
+1. **First time:** freeze from the current code, which was proven identical to the original queries
+   (SQL/012: 24,160 cases, 0 differences).
+2. **A change that must not change results** (e.g. the fact/dimension model): run without `--freeze`. It must
+   report 0 differences. Do not freeze to make a failure go away.
+3. **A change that is meant to change results** (e.g. a rounding rule): run, check that only the intended cases
+   differ, agree the new values, then freeze, and commit the new baseline with the change.
 
-  The permanent harness should add NULLs to its hand-checked dataset.
-- **Zero denominators aren't covered by the demo data.** The old Say/Do expression had no `NULLIF` and
-  would have failed with a division-by-zero error; the new one returns NULL (no bar). Expected and intended;
-  cover it in the hand-checked dataset.
-- **Parameter typing:** filter values are written as untyped `PREPARE`/`EXECUTE` parameters, which Postgres
-  infers the same way as JDBC `Types.OTHER` (what the server uses). That makes the comparison faithful, but it
-  doesn't exercise the real JDBC driver; the running app does.
-- **Same data, same flags:** both paths must run against the same database state and with identical `psql`
-  output flags. A mismatch in separators alone makes every non-empty case "differ" (this happened once).
-- **Speed:** about 24k cases × 2 run in roughly 25 seconds against a local Postgres.
+The baseline also changes when the demo data or the metric/focus-level rows change; freeze again after
+confirming why. Commit `baseline/demo-baseline.txt` (about 3 MB). `target/parity/` is not committed.
 
-## What the permanent version needs (roadmap: fact/dimension branch)
+## What the demo-data cases cover
 
-1. Run automatically (a JUnit test under a test profile, or one script), with no hand-copied metric rows.
-2. A small **hand-checked dataset** with known answers. It should include:
-   - zero denominators, NULL values and NULL labels;
-   - empty groups, apostrophes and ties;
-   - the same team in two months;
-   - the Team A/B example (38%, not 57.5%; OVERVIEW §4.1).
-3. A **frozen baseline** (`new.out` from the last accepted version), so later changes are compared against it
-   once the old path no longer exists.
-4. The mutation check as part of the run: a deliberately broken variant must produce differences.
+Generated from the database every run (so new metrics and levels are included automatically), per active metric:
+
+- each focus level with no filter;
+- each focus level filtered by every single value of every focus level, NULL included (`IS NULL`);
+- drill-down paths: each value, then the next level in the area by `sort_order`, 3 levels deep for the first
+  metric and 2 for the others. These are plain filter combinations, so they stay valid when
+  `drill_to_focus_level_pk` replaces `sort_order` as the drill order;
+- 300 seeded random combinations of 2–3 filters (same seed every run, so the same cases);
+- a value with an apostrophe (`O'Brien`).
+
+Filter values are taken from the labels the metrics return, so the generator doesn't depend on the FROM clause.
+Cases are identified by names (`Say/Do Ratio | Year | Team=Team 7`), not IDs. Focus-level names must therefore be
+unique, and renaming a metric or level means freezing again.
+
+## Hand-checked dataset
+
+`fixture/fixture-data.sql` adds 4 sprints, 5 teams and 7 fact rows. Every row is there for an edge case:
+
+| Row | Sprint | Team | Committed / completed (Say/Do) | Other values that matter |
+|---|---|---|---|---|
+| f1 | 2025-01 | Team A | 10 / 9 | velocity 20.00; added 2 + removed 1, GREATEST(10, 11) = 11; modified 1, estimated 4 of 5 |
+| f2 | 2025-01 | Team B | 40 / 10 | velocity 30.00; no churn, GREATEST = 40; 0 modified, 10 of 10 estimated |
+| f3 | 2025-02 | Team A | 0 / 0 (zero denominator) | velocity NULL; everything else 0 |
+| f4 | 2025-02 | O'Brien Squad | 20 / 15 | velocity 15.50; churn 5 + 0, GREATEST(20, 18) = 20; 2 modified, 8 of 8 |
+| f5 | 2025-04 | Team D (NULL levels 1–3) | 20 / 10 | velocity 15.50 (tie); churn 0 + 5, GREATEST(20, 25) = 25; 3 modified, 6 of 6 |
+| f6 | 2026-01 | Team A | 10 / 10 | velocity 22.25; no churn, GREATEST = 10; 0 modified, 5 of 5 |
+| f7 | 2026-01 | O'Brien Squad | 10 / 5 | velocity NULL; churn 1 + 1, GREATEST(10, 5) = 10; 0 modified, 3 of 4 |
+
+Team A and Team B share levels 2–5 (Mgr Lee …); O'Brien Squad reports to Mgr O'Brien; Team D has no level 1–3
+names; Team E has no fact rows. Expected answers (`fixture/expected.tsv`), worked out by hand:
+
+| Case | Calculation | Expected |
+|---|---|---|
+| Say/Do, Level 2, Sprint 25.01 | (9 + 10) / (10 + 40) | Mgr Lee **38.00** (not 57.50, the average of 90 % and 25 %; OVERVIEW §4.1) |
+| Say/Do by Team | O'Brien (15+5)/(20+10); A (9+0+10)/(10+0+10); B 10/40; D 10/20 | 66.67, 95.00, 25.00, 50.00 |
+| Say/Do by Level 2 | Lee (19+10)/(20+40); O'Brien 20/30; NULL 10/20 | 48.33, 66.67, NULL label 50.00 |
+| Say/Do by Sprint, Team A | 9/10; 0/0; 10/10 | 90.00, **NULL** (no bar, no error), 100.00 |
+| Say/Do by Month (all years) | Jan: (9+10+10+5)/(10+40+10+10); Feb 15/20; Apr 10/20 | 48.57, 75.00, 50.00 |
+| Say/Do by Year & Month | 19/50; 15/20; 10/20; 15/20 | 38.00, 75.00, 50.00, 75.00 (tie) |
+| Say/Do by Year | 2025: 44/90; 2026: 15/20 | 48.89, 75.00 |
+| Velocity by Team (AVG ignores NULL) | O'Brien 15.50; A (20 + 22.25)/2 = 21.125; B 30; D 15.50 | 15.50, **21.13** (rounds half up), 30.00, 15.50 (tie) |
+| Velocity, Team A in Sprint 25.02 | only a NULL value | Team A with NULL value |
+| Scope Churn by Team | O'Brien (5+2)/(20+10); A 3/(11+0+10); B 0/40; D 5/25 | 23.33, 14.29, 0.00, 20.00 |
+| Estimate Changed by Team | O'Brien 2/12; A 1/10; B 0/10; D 3/6 | 16.67, 10.00, 0.00, 50.00 |
+| % Estimated by Team | O'Brien 11/12; A 9/10; B 10/10; D 6/6 | 91.67, 90.00, 100.00, 100.00 (tie) |
+| Say/Do by Team, Team = Team E | no fact rows | empty result |
+| Say/Do by Team, Level 2 IS NULL | Team D only | Team D 50.00 |
+| Say/Do by Team, Level 2 = Mgr O'Brien | apostrophe bound as a value | O'Brien Squad 66.67 |
+
+To add a case: add rows to `fixture-data.sql` if needed, work out the answer by hand, add it to `expected.tsv`
+(format in the file's header), and add it to this table.
+
+## File formats
+
+`expected.tsv` and the baseline use the same format: `## <header>` starts a case, followed by one `label|value`
+line per chart row in result order. `\N` is a NULL label, an empty value is NULL, and lines starting with `#` are
+comments. A baseline header is the case key `metric | level | filters`. An expected header is
+`description | metric | level | filters`. Filters are `-` or `Level=value` joined by ` & `, with `\N` for IS NULL.
+Backslash escapes `\ | & = #` and line breaks inside names and values.
+
+## Retired one-off scripts
+
+`parity.py`, `Gen.java` and `cmp.py` were the one-off SQL/012 check (old hand-written queries vs the new builder,
+through `psql`). The permanent check replaces them once the first baseline is frozen; delete them then.
+
+## Limitations
+
+- The fixture uses the demo schema's tables (`Sprint_Metrics_Fact`, `Sprint_Dim`, `Team_Dim`). The fact/dimension
+  model must keep working on it, or the fixture moves with it.
+- Text ordering depends on collation, so a baseline frozen on one machine may not match another database.
+  Fixture labels were chosen to sort the same in `C` and `en_US`.
+- Exact text comparison: a deliberate change in decimals shows up as a difference everywhere (as intended).
