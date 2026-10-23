@@ -28,7 +28,20 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<!-- Spring AI 1.1.x is the Spring Boot 3 line (2.x needs Spring Boot 4). Used for the MCP server (docs/MCP.md). -->
+		<spring-ai.version>1.1.0</spring-ai.version>
 	</properties>
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.ai</groupId>
+				<artifactId>spring-ai-bom</artifactId>
+				<version>${spring-ai.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 	<dependencies>
 		<!-- Spring MVC + JPA -->
 		<dependency>
@@ -53,6 +66,12 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
+		</dependency>
+
+		<!-- MCP server (Prism Advisor, docs/MCP.md): Streamable HTTP on /mcp, off unless prism.mcp.enabled=true -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
 		</dependency>
 
 		<!-- Password hashing (BCrypt) -->

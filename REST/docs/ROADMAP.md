@@ -11,15 +11,13 @@ _Last updated: 2026-10-22._
 
 ## 1. Waiting on the owner
 
-1. **Commit the parity baseline and delete the retired scripts** (feature branch). The first baseline was frozen
-   and checked on 2026-10-22: 23,557 cases, 118,168 rows, 0 differences; the wrong calculation was detected.
-   ```bash
-   cd ~/Documents/Work/prism/REST/tools/parity && rm -f parity.py Gen.java cmp.py
-   ```
-   Commit `tools/parity/baseline/demo-baseline.txt` with the rest of `tools/parity/` and the new tests.
+1. **Try the MCP Advisor skeleton** (branch `feature-MCP-Server`): build, run with `--prism.mcp.enabled=true`,
+   check the resource and `draft_metric` in the MCP Inspector (steps: `docs/MCP.md` §7). Paste any build or
+   startup error.
 
-(2026-10-21: obsolete files deleted, migrations 010–012 run, Year / Quarter / Month filtering confirmed through
-the real JDBC driver.)
+Done: parity baseline frozen and committed, retired scripts deleted (2026-10-22: 23,557 cases, 118,168 rows,
+0 differences); obsolete files deleted, migrations 010–012 run, Year / Quarter / Month filtering confirmed through
+the real JDBC driver (2026-10-21).
 
 ## 2. Next build steps (agreed order)
 
@@ -63,7 +61,10 @@ the real JDBC driver.)
    - two reorderable lists per focus area: display order, and drill order with an "excluded" box.
 6. **Schema reading** for client data sources (list tables and columns, suggest joins from foreign keys).
 7. **Calculation templates / Custom type** (free-form expression through the same parser).
-8. **Prism Advisor and community library** (MCP; vision in OVERVIEW §8, design in [MCP.md](MCP.md)):
+8. **Prism Advisor and community library** (MCP; vision in OVERVIEW §8, design in [MCP.md](MCP.md)). Being built
+   on `feature-MCP-Server` ahead of the fact/dimension work (owner, 2026-10-22); skeleton done (§1 item 1). Next:
+   the remaining guides, the first catalog entries (Claude drafts, owner reviews), `search_metric_catalog`,
+   `review_star_schema` (JSqlParser), the three prompts.
    - Advisor: owner-curated metric catalog, guides, `review_star_schema` and `draft_metric` tools, guided prompts;
    - capture (`submit_insight`) and a curation queue; then give-to-get community access and enterprise-private
      knowledge once authentication exists (#4);

@@ -5,7 +5,9 @@
 > **what to build next** is in [ROADMAP.md](ROADMAP.md). This file is the technical design: where the server
 > runs, what it exposes, the safety rules, and the phases.
 >
-> Status: **design draft (Oct 2026)**. Nothing is built yet. Decisions still open are marked _Open_.
+> Status: **phase 1 skeleton built (Oct 2026, branch `feature-MCP-Server`)**: the `/mcp` endpoint, one resource
+> (`prism://guide/metric-types`) and one tool (`draft_metric`). The rest of phase 1 is still design. Decisions still
+> open are marked _Open_.
 
 _Last updated: 2026-10-22._
 
@@ -38,7 +40,7 @@ flowchart LR
         AI["Claude / Copilot / Cursor"]
     end
     subgraph Prism["Prism API (Spring Boot)"]
-        MCP["MCP endpoint /mcp<br/>(com.prism.mcp)"]
+        MCP["MCP endpoint /mcp<br/>(com.prism.api.mcp)"]
         ADV["Advisor services<br/>catalog · schema review · metric draft"]
         CAT[("Catalog files<br/>owner-curated, in git")]
         QB["MetricQueryBuilder · MetricType<br/>(existing)"]
@@ -55,7 +57,7 @@ flowchart LR
     REST --> SVC
 ```
 
-- **One new package, `com.prism.mcp`**, inside the existing API, with its own endpoint (`/mcp`). The REST API and
+- **One new package, `com.prism.api.mcp`**, inside the existing API, with its own endpoint (`/mcp`). The REST API and
   the UI don't change.
 - **Advisor tools reuse the real calculation code.** `draft_metric` builds its SQL preview with the same
   `MetricQueryBuilder` the charts use, so what the Advisor shows is exactly what Prism would run. It never
@@ -69,9 +71,9 @@ flowchart LR
 | Phase | Runs | Why |
 |---|---|---|
 | 1 (Advisor, local) | Inside the Prism API, switched on by a property (`prism.mcp.enabled=true`, off by default) | Simplest; reuses the code directly; no hosting |
-| 2+ (community library) | A **central Advisor service**, extracted from `com.prism.mcp` | Prism deployments are per cloud and per enterprise (OVERVIEW §3.1), but the community library must be shared by all clients, so it can't live in one deployment |
+| 2+ (community library) | A **central Advisor service**, extracted from `com.prism.api.mcp` | Prism deployments are per cloud and per enterprise (OVERVIEW §3.1), but the community library must be shared by all clients, so it can't live in one deployment |
 
-To keep that extraction cheap, `com.prism.mcp` may depend only on `MetricType`, `MetricDefinition`,
+To keep that extraction cheap, `com.prism.api.mcp` may depend only on `MetricType`, `MetricDefinition`,
 `MetricQueryBuilder` and its own classes. Controllers, the users code and JDBC are off limits for the Advisor. When
 it's extracted, those shared classes move to a small `prism-core` Maven module used by both applications.
 
@@ -180,14 +182,43 @@ per-row ratio (average of averages).
 | 4. Analyst | `list_metrics`, `list_focus_levels`, `get_metric_data` (names in, resolved to IDs, through `SprintMetricsService`); optional `compare_periods` | Phase 3 (the enterprise must come from the token), read-only data-source login (roadmap #3) |
 | 5. Drivers | "What drives this?" tool: within-team, lagged and conditional relationships (OVERVIEW §8.4) | Fact/dimension model, working-practice dimensions, incidents fact |
 
-## 6. Open decisions
+## 6. Decisions (owner, 2026-10-22)
 
-1. **Phase 1 inside the Prism API** (recommended; extract later) **or a separate application from the start.**
-2. **Catalog format:** Markdown + YAML header (recommended) or pure YAML/JSON.
-3. **JSqlParser now** for `review_star_schema` (recommended; reused by the admin screens) **or simple text
-   rules first.**
-4. **Who writes the first catalog entries:** Claude drafts (DORA, flow, predictability, quality), the owner
-   reviews and decides what Prism stands behind.
+1. **Phase 1 inside the Prism API** (package `com.prism.api.mcp`, so the existing component scan finds it),
+   extracted to a central service later.
+2. **Catalog format:** Markdown + YAML header, in git.
+3. **JSqlParser now** for `review_star_schema` (reused by the admin screens).
+4. **First catalog entries:** Claude drafts, the owner reviews and decides what Prism stands behind.
+
+## 7. What's built (phase 1 skeleton)
+
+| Piece | Where |
+|---|---|
+| Spring AI 1.1.0 BOM + `spring-ai-starter-mcp-server-webmvc` | `pom.xml` |
+| Server settings: off by default (`prism.mcp.enabled`), Streamable HTTP, SYNC, name `prism-advisor`, instructions | `application.properties` |
+| Local-only guard on `/mcp` (loopback only; others get 403 and an `MCP_REQUEST_REJECTED` audit line) | `McpConfig` |
+| Resource `prism://guide/metric-types` | `AdvisorResources`, `AdvisorGuides`, `resources/advisor/guides/metric-types.md` |
+| Tool `draft_metric` | `AdvisorTools` → `MetricDraftService` → `MetricDraft` |
+| Unit tests (17) | `MetricDraftServiceTests`, `AdvisorGuidesTests` |
+
+**Try it** (on the owner's Mac):
+
+```bash
+cd ~/Documents/Work/prism/REST
+./build.sh                                   # first build downloads Spring AI
+./run.sh --prism.mcp.enabled=true            # log: "MCP server on: /mcp (local requests only)"
+npx @modelcontextprotocol/inspector          # Transport: Streamable HTTP, URL http://localhost:8080/mcp
+```
+
+In the Inspector: **Resources** → `prism://guide/metric-types` shows the guide; **Tools** → `draft_metric` with
+name `Change Failure Rate`, type `percentage`, numerator `smf.failed_deployments`, denominator `smf.deployments`
+returns `valid: true`, an INSERT and the SQL preview. Try type `count` or a numerator `smf.pass_rate` to see an
+error and a warning.
+
+Checked in the Claude session (no Maven access there): compiled with `-Xlint:all -Werror` against stand-ins for
+Spring AI, the MCP SDK and the servlet API; the 17 tests pass; the generated INSERT runs against the real
+`Metrics` table (and is skipped when re-run); the preview SQL runs against the demo data. **Not yet checked:** the
+real Spring AI annotations and auto-configuration. That needs the first Maven build and the Inspector run.
 
 Sources: [Spring AI 1.1 GA](https://spring.io/blog/2025/11/12/spring-ai-1-1-GA-released/) ·
 [Spring AI MCP Boot Starters](https://spring.io/blog/2025/09/16/spring-ai-mcp-intro-blog) ·

@@ -2,15 +2,16 @@
 
 Quick orientation for anyone (human or Claude) working in `REST/`. **What to do next: `docs/ROADMAP.md`** (start each session there). Product context: `docs/OVERVIEW.md` (what Prism is, data model today vs target, security model, roadmap). MCP server design (Advisor / Analyst): `docs/MCP.md`. UI how-to: `frontend/docs/DEVELOPER_GUIDE.md`. Read this before opening source files; most questions about structure, endpoints, and conventions are answered here.
 
-_Last updated: 2026-10-21, after the permanent metric parity check (feature branch: fact/dimension model)._
+_Last updated: 2026-10-22, after the MCP Advisor skeleton (branch feature-MCP-Server; built on the parity-check work)._
 
 ## Stack
 
 - **Spring Boot 3.5.5**, Java **21**, Maven (wrapper 3.9.11). Artifact: `com.prism:prism-api:1.0.0` → `target/prism-api-1.0.0.jar`.
 - **Pure Java** — Groovy and gmavenplus were removed in Oct 2026. No Lombok (only add it if a later change clearly benefits).
 - Data access is **raw SQL via `JdbcTemplate`** returning `List<Map<String,Object>>` / `Map<String,Object>`. No JPA entities exist, even though `spring-boot-starter-data-jpa` is on the classpath (`ddl-auto=none`).
+- **Spring AI 1.1.x** (`spring-ai-bom`, Spring Boot 3 line) for the MCP server: `spring-ai-starter-mcp-server-webmvc`, annotations in `org.springaicommunity.mcp.annotation` (they move to `org.springframework.ai.mcp.annotation` in Spring AI 2.x).
 - PostgreSQL (`jdbc:postgresql://localhost:5432/playpen`, schema `prism`). BCrypt via `spring-security-crypto` (no Spring Security filter chain — endpoints are unauthenticated).
-- Build: `./build.sh` / `build.bat` from `REST/` (runs `npm run build` in `frontend/`, then `mvn clean package`). Run: `./run.sh` (`java -jar target/prism-api-1.0.0.jar`). `test.bat` references a stale jar name (`api-0.0.1-SNAPSHOT.jar`).
+- Build: `./build.sh` / `build.bat` from `REST/` (runs `npm run build` in `frontend/`, then `mvn clean package`). Run: `./run.sh` (`java -jar target/prism-api-1.0.0.jar`; extra arguments go to Spring Boot, e.g. `./run.sh --prism.mcp.enabled=true`). `test.bat` references a stale jar name (`api-0.0.1-SNAPSHOT.jar`).
 
 ## Source map
 
@@ -29,6 +30,15 @@ src/main/java/com/prism/
 │   │   └── AuthController.java      /api/auth login + change-password
 │   ├── common/utils/
 │   │   └── SecurityUtils.java       BCrypt hash/verify, BCRYPT_COST = 12
+│   ├── mcp/                         MCP server: Prism Advisor (docs/MCP.md); off unless prism.mcp.enabled=true
+│   │   ├── AdvisorResources.java    @McpResource: prism://guide/metric-types (Markdown from resources/advisor/guides)
+│   │   ├── AdvisorTools.java        @McpTool draft_metric → MetricDraftService (timed, never touches a database)
+│   │   ├── AdvisorGuides.java       guide list + loader (classpath advisor/guides/<id>.md, only listed IDs)
+│   │   ├── MetricDraftService.java  draft_metric rules (type/denominator, limits, forbidden sequences), warnings
+│   │   │                            (stored ratios, average of ratios), re-runnable Metrics INSERT, SQL preview via
+│   │   │                            the real MetricQueryBuilder
+│   │   ├── MetricDraft.java         record {valid, errors, warnings, calculation, insertSql, previewSql}
+│   │   └── McpConfig.java           local-only filter on /mcp (loopback only, 403 + audit otherwise) — until auth
 │   ├── metrics/
 │   │   ├── SprintMetricsController.java   /api/metrics (list, data, focus areas/levels)
 │   │   ├── SprintMetricsService.java      chart data from IDs: resolves metadata, builds + runs the query
@@ -63,7 +73,8 @@ src/main/java/com/prism/
 tools/parity/                        metric parity check (README.md): run.sh, fixture/ (hand-checked dataset + expected.tsv),
                                      baseline/demo-baseline.txt (frozen); parity.py/Gen.java/cmp.py = retired SQL/012 one-off
 src/main/resources/
-├── application.properties           incl. per-category log levels (logging.level.<Category>)
+├── application.properties           incl. per-category log levels (logging.level.<Category>); MCP server settings
+├── advisor/guides/*.md              Advisor guides (owner-curated content, served as MCP resources)
 ├── logback-spring.xml               appenders: console; logs/audit.log + logs/perf.log (daily roll)
 └── static/   BUILD OUTPUT of frontend/ (`npm run build`) — do not edit; git-ignored
 src/test/java/com/prism/api/
@@ -72,6 +83,8 @@ src/test/java/com/prism/api/
 ├── metrics/MetricQueryBuilderTests.java   plain JUnit (SQL per type, row condition, bound filters, guards)
 ├── metrics/MetricParityTests.java         live-DB parity check, skipped unless -Dprism.parity=true (tools/parity/run.sh);
 │                                          + ParityCase (case keys), ParityResults (text format, comparison)
+├── mcp/MetricDraftServiceTests.java       plain JUnit (draft_metric rules, warnings, INSERT quoting, preview)
+├── mcp/AdvisorGuidesTests.java           plain JUnit (guides load; unknown IDs refused)
 └── common/utils/SecurityUtilsTests.java   plain JUnit, no Spring context
 src/test/java/com/prism/common/utils/LogUtilsTests.java   plain JUnit (records, masking, cycles, duration)
 ```
