@@ -1,8 +1,8 @@
 # Prism REST API — Codebase Guide
 
-Quick orientation for anyone (human or Claude) working in `REST/`. **What to do next: `docs/ROADMAP.md`** (start each session there). Product context: `docs/OVERVIEW.md` (what Prism is, data model today vs target, security model, roadmap). UI how-to: `frontend/docs/DEVELOPER_GUIDE.md`. Read this before opening source files; most questions about structure, endpoints, and conventions are answered here.
+Quick orientation for anyone (human or Claude) working in `REST/`. **What to do next: `docs/ROADMAP.md`** (start each session there). Product context: `docs/OVERVIEW.md` (what Prism is, data model today vs target, security model, roadmap). MCP server design (Advisor / Analyst): `docs/MCP.md`. UI how-to: `frontend/docs/DEVELOPER_GUIDE.md`. Read this before opening source files; most questions about structure, endpoints, and conventions are answered here.
 
-_Last updated: 2026-10-21, after metric types (SQL/012), generated temporary passwords and System Settings._
+_Last updated: 2026-10-21, after the permanent metric parity check (feature branch: fact/dimension model)._
 
 ## Stack
 
@@ -60,7 +60,8 @@ src/main/java/com/prism/
         │                            the level is off. Tests: src/test/.../common/utils/LogUtilsTests
         └── StringUtils.java         padding, dates, CSV, tokenizing helpers. NOTE: same simple name as
                                      org.springframework.util.StringUtils (used in controllers) — qualify one
-tools/parity/                        metric parity check: old vs new query path, exact comparison (README.md)
+tools/parity/                        metric parity check (README.md): run.sh, fixture/ (hand-checked dataset + expected.tsv),
+                                     baseline/demo-baseline.txt (frozen); parity.py/Gen.java/cmp.py = retired SQL/012 one-off
 src/main/resources/
 ├── application.properties           incl. per-category log levels (logging.level.<Category>)
 ├── logback-spring.xml               appenders: console; logs/audit.log + logs/perf.log (daily roll)
@@ -69,6 +70,8 @@ src/test/java/com/prism/api/
 ├── ApiApplicationTests.java         @SpringBootTest contextLoads
 ├── admin/TemporaryPasswordsTests.java     plain JUnit (format, alphabet, randomness)
 ├── metrics/MetricQueryBuilderTests.java   plain JUnit (SQL per type, row condition, bound filters, guards)
+├── metrics/MetricParityTests.java         live-DB parity check, skipped unless -Dprism.parity=true (tools/parity/run.sh);
+│                                          + ParityCase (case keys), ParityResults (text format, comparison)
 └── common/utils/SecurityUtilsTests.java   plain JUnit, no Spring context
 src/test/java/com/prism/common/utils/LogUtilsTests.java   plain JUnit (records, masking, cycles, duration)
 ```
@@ -117,7 +120,7 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 - **CITEXT gotcha:** the Postgres driver returns `citext` columns (`Users.email`, `Users.username`) as `PGobject`, which Jackson serializes as `{"type":"citext","value":…}`. Always select them as `email::text AS email`.
 - Confirmed types: `Users.user_id` **UUID**, `Users.email` CITEXT, `Enterprises.enterprise_pk` BIGSERIAL, `focus_area_pk` **integer**.
 - DDL lives in `~/Documents/Work/prism/SQL/` (001 star schema + Focus tables, 002–004 demo data, 005 Focus_Areas rebuild, 006 Enterprises, 007 Users, 008 Metrics + Focus_Levels data, 009 sort_order + Focus_Levels PK/FK, 010 System_Settings + key-sequence realignment, 011 blank usernames → NULL, 012 metric types + 5 demo metrics). **The API requires 009, 010 and 012 to have been run.**
-- **Target data model** (owner, Oct 2026; `docs/OVERVIEW.md` §4.2–4.3): all metadata enterprise-scoped; data sources → fact tables + shared dimension tables (fact–dimension links); metrics belong to a fact table; focus areas are defined on dimensions, focus levels are dimension columns; **no Metric Groups** (the fact table plays that role; add later only if needed); opt-out exclusions per metric/focus area/level; dashboards may mix fact tables but offer only focus areas common to all their charts; dashboards → tabs (≤4 charts) → shares; role-based write access to metadata.
+- **Target data model** (owner, Oct 2026; `docs/OVERVIEW.md` §4.2–4.3): all metadata enterprise-scoped; tables `Data_Sources` (database and API connection columns, exactly one filled) → `Facts` + shared `Dimensions`, linked by the association table `Facts_Dimensions_Assoc` (join columns); metrics belong to a fact; focus areas are defined on dimensions, focus levels are dimension columns; **no Metric Groups** (the fact table plays that role; add later only if needed); opt-out exclusions per metric/focus area/level; dashboards may mix fact tables but offer only focus areas common to all their charts; dashboards → tabs (≤4 charts) → shares; role-based write access to metadata.
 
 ## Conventions (agreed)
 
@@ -129,12 +132,12 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 - Groovy-truthiness was preserved as `StringUtils.hasLength(...)` (null/"" rejected, whitespace accepted) and `== null || == 0` for numbers.
 - Behaviour changes that aren't strictly required are flagged with `TODO` comments and handled as separate changes.
 - **Metric data: store numerator and denominator columns, never percentages.** Ratios are computed in the metric's SELECT as `SUM(numerator) / SUM(denominator)` so they stay correct at every drill-down level (averaging stored percentages = average of averages). See `docs/OVERVIEW.md` §4.1.
-- **Calculations must stay exactly right.** Any change that could affect how metric values are calculated (query builder, metric types, metadata, filters) must be proven identical before it ships: run every metric × focus level × filter combination through the old and new paths against the same data and compare exact values (as done for SQL/012: 24,160 cases, 120,580 rows, 0 differences; a deliberate rounding change was detected in 11,792 cases), plus hand-checked expected values for edge cases. A permanent version of this harness is planned with the fact/dimension work.
+- **Calculations must stay exactly right.** Any change that could affect how metric values are calculated (query builder, metric types, metadata, filters) must be proven identical before it ships: run every metric × focus level × filter combination through the old and new paths against the same data and compare exact values (as done for SQL/012: 24,160 cases, 120,580 rows, 0 differences; a deliberate rounding change was detected in 11,792 cases), plus hand-checked expected values for edge cases. **Permanent harness:** `bash tools/parity/run.sh` (hand-checked dataset, all demo-data cases vs the frozen baseline, and a deliberately wrong calculation that must be detected); freeze a new baseline (`--freeze`) only on the owner's machine and only for an agreed change (`tools/parity/README.md`).
 - **Database changes = new migration scripts only.** Add the next numbered file in `prism/SQL/` (`NNN-short_description.sql`, e.g. `009-focus_level_sort_order.sql`). Scripts must be **re-runnable** (`IF NOT EXISTS`, `DO $$ … IF NOT EXISTS … $$`, `ON CONFLICT DO NOTHING`, no unguarded `DROP`). Existing scripts are historical: they may be corrected for accuracy, but they are **not re-executed**, so any fix that must reach the live database needs its own new script. Use quoted CamelCase table names (`"prism"."Focus_Levels"`).
 
 ## Open issues / backlog
 
-1. **SQL injection — metrics** — **closed for the client side (Oct 2026, SQL/012):** `/sprint-metrics` was removed; the UI sends only IDs and values to `/api/metrics/data`, and the server builds every query from cached metadata with bound filter values. Remaining: metric expressions in `Metrics` are trusted SQL (only a `;`/comment guard until the parser exists), and the FROM clause is hard-coded. **Design agreed Oct 2026** (`docs/OVERVIEW.md` §4.3, §6): client sends only IDs/values `{metric_pk, focus_level_pk, filters:[{focus_level_pk, operator:"eq", value}]}`; server builds all SQL from metadata cached in memory (whole cache reloaded every 15 min, configurable; unknown IDs → 400), binds values, later runs on a read-only data-source login. Planned order: (a) ✅ metric types in `Metrics`, cache, ID-based endpoint, UI metric list — next: data-source/fact/dimension/link tables + focus levels pointing at them, drill pointer `drill_to_focus_level_pk` (feature branch, with the parity harness); (b) read-only connection; (c) admin screens with parse-based validation (JSqlParser allow-list), Test, Preview; (d) schema reading; (e) calculation templates.
+1. **SQL injection — metrics** — **closed for the client side (Oct 2026, SQL/012):** `/sprint-metrics` was removed; the UI sends only IDs and values to `/api/metrics/data`, and the server builds every query from cached metadata with bound filter values. Remaining: metric expressions in `Metrics` are trusted SQL (only a `;`/comment guard until the parser exists), and the FROM clause is hard-coded. **Design agreed Oct 2026** (`docs/OVERVIEW.md` §4.3, §6): client sends only IDs/values `{metric_pk, focus_level_pk, filters:[{focus_level_pk, operator:"eq", value}]}`; server builds all SQL from metadata cached in memory (whole cache reloaded every 15 min, configurable; unknown IDs → 400), binds values, later runs on a read-only data-source login. Planned order: (a) ✅ metric types in `Metrics`, cache, ID-based endpoint, UI metric list — next: `Data_Sources`/`Facts`/`Dimensions`/`Facts_Dimensions_Assoc` + focus levels pointing at them, drill pointer `drill_to_focus_level_pk` (feature branch, with the parity harness); (b) read-only connection; (c) admin screens with parse-based validation (JSqlParser allow-list), Test, Preview; (d) schema reading; (e) calculation templates.
 2. ~~SQL injection — `fetchFocusLevels`~~ **fixed Oct 2026** (bound int parameter).
 3. **400 vs 500**: missing request fields throw `ResourceNotFoundException`/`ParameterValueRequiredException` with no `@ControllerAdvice`, so clients get 500. Add a handler returning 400 (and rename the exception for missing params).
 4. ~~`user_id` binding bug~~ **fixed Oct 2026** (all user queries bind a `UUID`; malformed IDs → 400/404).
@@ -149,6 +152,6 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 
 - The REST folder lives on the owner's Mac (`~/Documents/Work/prism/REST`); a cloud session reaches it only through the file bridge. **Files nested ≥ 7 folders below `REST`** (e.g. `src/main/java/com/prism/api/common/utils/*`) cannot be *read/staged*, though they can be *written*. Workaround: connect `REST/src` (or deeper) as its own folder.
 - The bridge **cannot delete files** — give the owner `rm` commands instead.
-- Cloud sessions **cannot reach Maven Central or the npm registry** (403) or the owner's `localhost` Postgres, so `mvn`/`npm install`/`npm run build` must run on the owner's machine. Interim checks used: `javac -Xlint:all -Werror` against API stubs; for the frontend, `tsc` against type stubs plus an esbuild bundle (real React 19 from the container's global node_modules, shims for router/chart) driven by Playwright with a mocked `/api`.
+- Cloud sessions **cannot reach Maven Central or the npm registry** (403) or the owner's `localhost` Postgres, so `mvn`/`npm install`/`npm run build` must run on the owner's machine. Interim checks used: `javac -Xlint:all -Werror` against API stubs (for `MetricParityTests`: a stub `JdbcTemplate` that runs SQL through `psql`, so the whole harness runs against a local Postgres); for the frontend, `tsc` against type stubs plus an esbuild bundle (real React 19 from the container's global node_modules, shims for router/chart) driven by Playwright with a mocked `/api`.
 - The owner builds, runs and tests locally and pastes errors back — prefer asking for the stack trace over re-staging files.
 - After editing any file listed above, update this guide's map/endpoints/backlog in the same change — and `docs/OVERVIEW.md` / `frontend/docs/DEVELOPER_GUIDE.md` when product status, flows, conventions or security change.

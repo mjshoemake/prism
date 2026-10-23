@@ -27,7 +27,7 @@ This forces both the backend and the frontend to be **generic**: neither knows a
 | Concept | Meaning | Example |
 |---|---|---|
 | **Metric** | A value computed from fact data, defined by a SQL expression. | Say/Do Ratio = completed ÷ committed story points |
-| **Fact Table** *(target)* | The data a set of metrics is calculated from, plus the dimensions it joins to. In practice it plays the role of a "metric group": metrics on the same fact table can be sliced the same ways. | `Sprint_Metrics_Fact`: Say/Do, Velocity, Scope Churn |
+| **Fact** *(target; table `Facts`)* | The data a set of metrics is calculated from, plus the dimensions it joins to. In practice it plays the role of a "metric group": metrics on the same fact table can be sliced the same ways. | `Sprint_Metrics_Fact`: Say/Do, Velocity, Scope Churn |
 | **Focus Area** | A dimension you can slice by. | Time, Organization |
 | **Focus Level** | One level within a focus area; the chart groups by it. Levels are ordered top-down (`sort_order`). | Time: Year → Quarter → Month → Sprint |
 | **Filter** | A "level = value" condition, e.g. *Director = Sarah Williams*. Filters combine with AND. | |
@@ -181,12 +181,12 @@ Static, reusable tables that describe each metric so the generic UI and API can 
 erDiagram
     Enterprises ||--o{ Users : has
     Enterprises ||--o{ Data_Sources : owns
-    Data_Sources ||--o{ Fact_Tables : contains
-    Data_Sources ||--o{ Dimension_Tables : contains
-    Fact_Tables ||--o{ Fact_Dimensions : "joins to"
-    Dimension_Tables ||--o{ Fact_Dimensions : ""
-    Fact_Tables ||--o{ Metrics : "calculated from"
-    Dimension_Tables ||--o{ Focus_Areas : "sliced as"
+    Data_Sources ||--o{ Facts : contains
+    Data_Sources ||--o{ Dimensions : contains
+    Facts ||--o{ Facts_Dimensions_Assoc : "joins to"
+    Dimensions ||--o{ Facts_Dimensions_Assoc : ""
+    Facts ||--o{ Metrics : "calculated from"
+    Dimensions ||--o{ Focus_Areas : "sliced as"
     Focus_Areas ||--o{ Focus_Levels : "ordered levels (dimension columns)"
     Metrics ||--o{ Metric_Exclusions : "may hide"
     Focus_Areas ||--o{ Metric_Exclusions : ""
@@ -231,12 +231,15 @@ Key rules of the target design:
 Metric SQL is never typed as a whole query. Implementors describe their STAR schema once, and each metric
 then only supplies its calculation. Prism writes every FROM, JOIN, GROUP BY and WHERE itself.
 
-| Entity | Describes |
+Table names (owner, Oct 2026): `Data_Sources`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc` (the `_Assoc` suffix
+marks an association table).
+
+| Entity (table) | Describes |
 |---|---|
-| **Data Source** | Where a STAR schema lives and how Prism connects (see below); read-only credentials kept in a secrets store, never in a table. |
-| **Fact Table** | A fact table in a data source: table name and alias. |
-| **Dimension Table** | A dimension table in a data source: table name and alias. Shared by any number of fact tables. |
-| **Fact–Dimension link** | Which dimensions a fact table joins to, and on which columns. Prism builds the JOINs from these. |
+| **Data Source** (`Data_Sources`) | Where a STAR schema lives and how Prism connects (see below); read-only credentials kept in a secrets store, never in a table. Database connection columns and API connection columns are separate; exactly one of the two must be filled (no separate type column). |
+| **Fact** (`Facts`) | A fact table in a data source: table name and alias. |
+| **Dimension** (`Dimensions`) | A dimension table in a data source: table name and alias. Shared by any number of facts. |
+| **Fact–dimension link** (`Facts_Dimensions_Assoc`) | Association table: which dimensions a fact joins to, and on which columns. Prism builds the JOINs from these. (A fact joining the same dimension twice, e.g. two date roles, would need a role name; not needed yet.) |
 | **Metric** | A fact table (metrics can share one), the **calculation**, an optional metric-level **condition** (e.g. only completed sprints), and display settings (title, legend, y-axis maximum, number format). |
 | **Focus Level** | Points to a dimension column (instead of holding a free-text column name). Grouping and drill-down filters can only use known columns. |
 
@@ -249,7 +252,7 @@ same rows. Prism writes the SQL:
 |---|---|---|---|---|
 | **Percentage** | numerator, denominator | `SUM(num) / NULLIF(SUM(den), 0) × 100` | `%`, axis 0–100 | Say/Do, % Estimated, Scope Churn, Commitment Strength (condition: trailing average present) |
 | **Ratio** | numerator, denominator | `SUM(num) / NULLIF(SUM(den), 0)` | no unit, fit to data | points per story |
-| **Average** | value | `SUM(value) / COUNT(rows)` (average per fact row) | fit to data | Velocity per team-sprint |
+| **Average** | value | `AVG(value)`: average per fact row; rows without a value are ignored, not counted as zero | fit to data | Velocity per team-sprint |
 | **Sum** | value | `SUM(value)` | fit to data | total points; "sprints with zero churn" = value `1`, condition `added + removed = 0` |
 
 - All four re-aggregate the raw fact rows at every drill-down level, so none of them averages averages (§4.1).
@@ -345,7 +348,7 @@ To keep that possible without building it now:
 - the metric-data request stays ID-based and source-neutral: metric, focus level, and filters with an operator;
 - the server reaches data through one "metric data provider" seam, with the database connection as the only
   implementation for now;
-- a data source records its type (`database` now, `api` later).
+- a data source has separate database and API connection columns, exactly one of them filled (database now, API later).
 
 ## 5. How a chart gets its data
 
@@ -409,10 +412,125 @@ The UI's own security rules are covered in the [UI developer guide](../frontend/
 | Server-side sessions, roles, tenant isolation | Planned |
 | Client-owned data schema / client data API contract | Planned |
 | External integrations (e.g. Jira) via Claude | Planned |
+| Prism Advisor (MCP), community library, improvement paths, "what drives this?" analysis | Vision (§8) |
 
-## 8. Where to go next
+## 8. Prism Advisor and community library (vision — discussed Oct 2026, not yet designed in detail)
+
+Clients can look up what experts say about improving a metric, but general advice often doesn't match their
+business, their ways of working or their data. The **Prism Advisor** is an AI assistant, delivered as an MCP
+server, that helps clients get value out of Prism. It covers which metrics address a struggle, how to calculate
+them, how to design Prism-compatible fact and dimension tables, and which behaviors actually drive the outcomes
+they care about, checked against their own data. Over time it learns from the whole client community.
+Technical design (where the MCP server runs, its resources, tools and prompts, safety rules, phases):
+[MCP.md](MCP.md).
+
+### 8.1 What the Advisor does
+
+| MCP part | Examples |
+|---|---|
+| **Resources** (reference content) | Metric catalog: problem addressed, Prism type, numerator/denominator, required fact columns, pitfalls. Guides: STAR schema for Prism, metric types, drill-down design, improvement paths (§8.3). |
+| **Tools** (definite answers) | `review_star_schema(ddl)`: Prism-compatibility findings (stored percentages, unclear grain, missing dimension keys, hierarchy columns that can't become focus levels, NULL handling). `draft_metric(...)`: a ready `Metrics` row plus the exact SQL Prism would run (the real `MetricQueryBuilder`). Later: `submit_insight` (§8.2). |
+| **Prompts** (guided workflows) | "Pick metrics for my team's struggle"; "Design my fact and dimension tables"; "Review my schema before connecting it to Prism". |
+
+Its value over a general AI is Prism's own rules (§4.1–4.3): ratio of sums, metric types, grain, focus levels as
+dimension columns. The checks give definite answers rather than plausible ones. The Advisor needs no access to
+client data. A later **Analyst** server (querying a client's metrics through Prism's normal data-source
+connection) depends on authentication (§6).
+
+### 8.2 Community library: give to get
+
+- **What's shared:** knowledge about *using* data, never the data itself. That means ways to calculate a metric
+  (there are always several) and their trade-offs; ways to organize dimensions; which dimensions suit which
+  metrics; pitfalls; improvement paths and their prerequisites; and findings about which behaviors drive which
+  outcomes, as direction and strength across clients ("in 7 of 9 contributing clients, branch age moved ahead of
+  change failure rate by about one sprint"), never any client's values.
+- **Your fact data is always your fact data.** No raw data, no identifying numbers, no names.
+- **Give to get (owner decision):** clients who contribute get the community library; clients who decline are
+  walled off from it. The AI still helps them as much as it can, with Prism's own content but without the
+  collective knowledge.
+- **Base layer for everyone:** Prism-authored content (catalog, guides, checks) is part of the product. Only the
+  community layer is gated, so a client who declines is never worse off than with a general AI.
+- **How knowledge enters:** (1) capture: at the end of a useful session the assistant proposes an insight, and
+  the user sees exactly what would be shared and approves it; (2) curation: a review queue where submissions are
+  generalized, anonymized and checked for correctness (the owner curates at first); (3) publish to the catalog.
+  Curation is what keeps wrong advice from spreading. Automatic contribution: once a client opts in, aggregated
+  usage signals (which metric patterns get kept, changed or retired) count, with no extra effort.
+- **Enterprise-private knowledge:** a client's own definitions, decisions and reasons, available immediately
+  within that enterprise only.
+- **Open questions:** exact contract wording for "contribute"; whether published lessons remain after a client
+  leaves (normally yes, since they are anonymized); a minimum contribution quality; a paid option for clients
+  whose policies forbid sharing; seeding the library (cold start) and terms for founding clients.
+
+### 8.3 Improvement paths: "it's never just one thing"
+
+Software delivery is a tapestry of practices that work best when no threads are missing, so the Advisor
+recommends **ordered improvement paths**, not single practices:
+
+- **Levels:** some improvements help almost any team; others only help on that foundation and can backfire
+  without it. Example: small batches and frequent releases are death to a team that relies on manual testing,
+  because significant changes go out without enough testing.
+- **Order of focus for quality** (owner): (1) test quality, (2) test coverage, (3) integration and batch size:
+  few concurrently open branches and short branch life (real continuous integration, not trunk-based on paper),
+  then small batches and frequent releases.
+- **Readiness from the team's own data:** where the team is now, the next step it is ready for, and the threshold
+  that shows it can move on (e.g. don't push batch size until automated coverage of changed code is steady and
+  escaped defects are falling). Warn when one thread is pulled without the others ("release frequency doubled,
+  automated testing hasn't moved").
+- **Test quality stand-ins:** mutation score, escaped defects in covered code, flaky-test rate. Test quality is
+  hard to measure objectively; together these make it trackable.
+- **Practices as dimensions:** each team's working practices (share of automated vs manual testing, branching,
+  review, release process) belong in the dimension design, as team attributes that change over time, so analyses
+  can split by them.
+
+### 8.4 Planned analysis: "what drives this?"
+
+Pick an outcome (e.g. change failure rate, Sev1/Sev2 incidents per month); Prism calculates candidate behavior
+metrics at the same grain (team × sprint or month) with the existing metric engine and ranks them by how strongly
+they move with the outcome.
+
+- **Within each team over time** (big teams don't just correlate with big numbers), **with time lags** (does this
+  month's branch age come before next month's failures?), with strength and amount of supporting data shown.
+- **Conditional effects:** split by the working-practice dimensions. A single overall correlation can hide
+  opposite effects that cancel out (frequent releases help teams with strong automated tests and hurt
+  manual-testing teams, so overall "no effect").
+- Always states that correlation isn't causation; the strongest evidence is a known change ("Team 7 moved to
+  short-lived branches in March: before and after").
+- Needs the fact/dimension model (shared dimensions across fact tables; incidents as their own fact, attributed to
+  a team or service and a period, with consistent severity).
+
+### 8.5 Metric gotchas to teach (examples)
+
+- **Count vs rate:** "reduce failed deployments" should mean change failure rate (failed ÷ total). Chasing the
+  count makes teams deploy less, so changes get bigger and riskier.
+- **Coverage as a target** gets gamed (tests that run code without checking it). Pair it with test-quality stand-ins.
+- **Percentiles (median, p90) can't be averaged:** Team A merged 20 branches in 1 day each, Team B 1 branch in
+  30 days. The average of the medians is 15.5 days, but the real median is 1 day. Same over time: sprint p90s
+  averaged over a quarter aren't the quarter's p90. Planned fix: a **Percentile** metric type (value column,
+  percentile, optional row condition) computed over raw rows with `PERCENTILE_CONT(p) WITHIN GROUP (ORDER BY …)`
+  at every drill-down level. It needs one fact row per item (e.g. per branch). "Average team p90" is a different,
+  legitimate metric when the team is the unit, and should be named that way. Today: "% of branches merged within
+  1 day" (Percentage with a row condition) works and re-aggregates correctly; average branch age works but is
+  skewed by forgotten branches.
+- **Branch measures:** decide when a branch starts (creation or first commit), exclude release and environment
+  branches, handle abandoned branches, map repositories to teams. Concurrently open branches need a daily
+  snapshot fact (average of daily counts).
+
+### 8.6 Build order (after the fact/dimension model)
+
+1. Advisor with an owner-curated catalog and the schema/metric checks; standalone value, no network effects needed.
+2. Capture (`submit_insight`) and a curation queue in Prism.
+3. Enterprise-private knowledge, and community access rules (give to get), once authentication exists (§6).
+4. Usage-based evidence, once there are enough clients.
+5. "What drives this?" analysis, and the Percentile metric type.
+
+Hosting: a central service (shared library, accounts), not only a local server. The read side (catalog and
+guides) could be open, even to prospects; the write side needs authentication and enterprise scoping.
+Implementation: see [MCP.md](MCP.md).
+
+## 9. Where to go next
 
 - **What's next?** → [Roadmap](ROADMAP.md): the to-do list, in order
+- **MCP server (Advisor / Analyst)?** → [MCP design](MCP.md)
 - **Working on the UI?** → [UI developer guide](../frontend/docs/DEVELOPER_GUIDE.md)
 - **Working on the API?** → [API codebase guide](../CLAUDE.md): source map, endpoints, conventions, backlog
 - **Changing the database?** → add the next numbered, re-runnable script in `prism/SQL/` (see the API guide's conventions)

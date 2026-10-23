@@ -5,35 +5,41 @@
 > and the numbered backlog** live in [CLAUDE.md](../CLAUDE.md). This file says *what to do next, in what order*.
 > Update it whenever an item is finished or a new one is agreed.
 
-_Last updated: 2026-10-21._
+_Last updated: 2026-10-22._
 
 ---
 
 ## 1. Waiting on the owner
 
-Verified 2026-10-21: obsolete files deleted (`TemporaryPasswordFields.tsx`, `SprintMetricsRequest.java`,
-`metricDefinitions.ts`), migrations 010–012 run, and filtering on Year / Quarter / Month works through the real
-JDBC driver (`Types.OTHER` binding confirmed).
+1. **Commit the parity baseline and delete the retired scripts** (feature branch). The first baseline was frozen
+   and checked on 2026-10-22: 23,557 cases, 118,168 rows, 0 differences; the wrong calculation was detected.
+   ```bash
+   cd ~/Documents/Work/prism/REST/tools/parity && rm -f parity.py Gen.java cmp.py
+   ```
+   Commit `tools/parity/baseline/demo-baseline.txt` with the rest of `tools/parity/` and the new tests.
 
-Still open (owner):
-- **Your own account:** if it still has a temporary password, change it within 72 hours of running 010.
-- **Optional:** run the parity check on your machine (`REST/tools/parity/README.md`).
+(2026-10-21: obsolete files deleted, migrations 010–012 run, Year / Quarter / Month filtering confirmed through
+the real JDBC driver.)
 
 ## 2. Next build steps (agreed order)
 
-1. **Feature branch: fact/dimension model** (owner creates the branch; prove-or-fail-fast, merge when confident).
-   - New tables: Data Source (type `database`; `api` later), Fact Table, Dimension Table, Fact–Dimension link.
+1. **Feature branch: fact/dimension model** (branch created and checked out by the owner, 2026-10-21;
+   prove-or-fail-fast, merge when confident).
+   - New tables: `Data_Sources` (separate database and API connection columns, exactly one filled; database
+     only for now), `Facts`, `Dimensions`, `Facts_Dimensions_Assoc` (association table: join columns).
      Seed them with the demo schema.
    - `Focus_Levels` point to a table and column instead of free-text `column_name`.
-   - `Metrics` point to a fact table; the hard-coded FROM clause (`MetricQueryBuilder.DEMO_FROM_CLAUSE`) goes
+   - `Metrics` point to a fact (`Facts`); the hard-coded FROM clause (`MetricQueryBuilder.DEMO_FROM_CLAUSE`) goes
      away. Prism adds only the joins a query needs.
    - **Drill-down pointer** `Focus_Levels.drill_to_focus_level_pk`. A level without one is standalone:
      clicking adds the filter and stays. Checks: same focus area, no loops. Seed: Year → Year & Quarter →
      Year & Month → Sprint, with Quarter and Month standalone. Organization: Level 5 → … → Team.
    - Server reaches data through one "metric data provider" seam (database now, client API later).
-   - **Parity first:** extend `REST/tools/parity` into a permanent check (JUnit against a test profile, or a
-     script), plus a small **hand-checked dataset**. It should cover: zero denominators, NULLs, empty groups,
-     apostrophes, ties, and the Team A/B 38%-vs-57.5% example. Freeze results as the baseline before switching.
+   - **Parity first:** ✅ permanent check built (2026-10-21): `MetricParityTests` through the real service, a
+     hand-checked dataset (zero denominators, NULL values and labels, empty groups, apostrophes, ties, rounding,
+     the same team in two months, the Team A/B 38%-vs-57.5% example), the demo data vs a frozen baseline, and a
+     wrong-calculation check. First baseline frozen 2026-10-22 (23,557 cases, 0 differences). Every later step on this
+     branch must pass `bash tools/parity/run.sh` with 0 differences.
 2. **Y-axis Scale control** on the chart: 0–100 (percentages), Fit to data, Custom min/max.
    - Bars beyond the maximum get a **barber-pole** top, and the real value shows on hover.
    - A raised minimum is flagged on the chart.
@@ -57,7 +63,16 @@ Still open (owner):
    - two reorderable lists per focus area: display order, and drill order with an "excluded" box.
 6. **Schema reading** for client data sources (list tables and columns, suggest joins from foreign keys).
 7. **Calculation templates / Custom type** (free-form expression through the same parser).
-8. Later: import a pasted full query into a metric; client-API data sources (if revenue justifies);
+8. **Prism Advisor and community library** (MCP; vision in OVERVIEW §8, design in [MCP.md](MCP.md)):
+   - Advisor: owner-curated metric catalog, guides, `review_star_schema` and `draft_metric` tools, guided prompts;
+   - capture (`submit_insight`) and a curation queue; then give-to-get community access and enterprise-private
+     knowledge once authentication exists (#4);
+   - **owner to-do:** the metric catalog content (Claude can draft: DORA, flow, predictability, quality) and the
+     open questions in OVERVIEW §8.2 (contract wording, leaving, paid option, seeding).
+9. **"What drives this?" analysis** (OVERVIEW §8.4): within-team, lagged and conditional relationships between
+   metrics; needs working-practice dimensions and an incidents fact.
+10. **Percentile metric type** (OVERVIEW §8.5): `PERCENTILE_CONT` over raw rows; needs per-item grain.
+11. Later: import a pasted full query into a metric; client-API data sources (if revenue justifies);
    PrivateLink connections; per-cloud deployments (OVERVIEW §3.1); dashboards (tabs ≤ 4 charts, sharing,
    dashboard-wide drill-down); roles; enterprise-scoped metadata; super-user enterprise picker; integrations
    (e.g. Jira).
@@ -77,6 +92,13 @@ Still open (owner):
 - No client STAR data in the Prism DB (demo schema only). The main path is a direct read-only connection;
   client APIs are a second phase.
 - No Metric Groups: the fact table plays that role.
+- Community library (OVERVIEW §8.2): give to get. Contributors get the collective knowledge, others are walled off
+  from it (the Prism-authored base layer stays available to all). What's shared is knowledge about using data
+  (calculation options, dimension designs, pitfalls, improvement paths, cross-client findings as direction and
+  strength), never fact data.
+- Improvement paths, quality order (owner): test quality → test coverage → integration and batch size (few open
+  branches, short branch life, then small batches and frequent releases). It's never just one thing.
+- Percentiles are never stored and averaged: a Percentile metric type computes them over raw rows (planned).
 - Metric types: Percentage, Ratio, Average (ignores missing values), Sum. No Count (use Sum of 1 with a
   condition). All metric-specific information lives only in `Metrics`.
 - Scope Churn = (added + removed) ÷ GREATEST(committed, completed), per row. Velocity = average of

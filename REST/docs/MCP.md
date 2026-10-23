@@ -1,0 +1,194 @@
+# Prism and MCP — Design
+
+> How an MCP server fits into Prism. **Why** (the product vision: Advisor, community library, improvement paths,
+> "what drives this?") is in [OVERVIEW.md §8](OVERVIEW.md);
+> **what to build next** is in [ROADMAP.md](ROADMAP.md). This file is the technical design: where the server
+> runs, what it exposes, the safety rules, and the phases.
+>
+> Status: **design draft (Oct 2026)**. Nothing is built yet. Decisions still open are marked _Open_.
+
+_Last updated: 2026-10-22._
+
+---
+
+## 1. What MCP adds to Prism
+
+[MCP](https://modelcontextprotocol.io) (Model Context Protocol) is the standard way for AI assistants (Claude,
+Copilot, Cursor and others) to use an outside system. A server offers three kinds of things:
+
+| MCP part | Meaning | In Prism |
+|---|---|---|
+| **Resources** | Read-only content the assistant can load | Metric catalog, guides, improvement paths |
+| **Tools** | Functions the assistant can call, with typed inputs and outputs | Schema review, metric drafting; later metric data |
+| **Prompts** | Named, reusable workflows the user can pick | "Pick metrics for my struggle", "Review my schema" |
+
+Prism has **two** possible MCP servers, built in this order:
+
+1. **Advisor**: helps clients get value out of Prism: which metrics, how to calculate them, how to design
+   Prism-compatible fact and dimension tables, improvement paths. It **needs no client data** and runs no queries
+   against any client database.
+2. **Analyst** _(later)_: answers questions from a client's own metrics ("which teams' change failure rate rose
+   this quarter?") by calling the same service the charts use. It needs authentication first (backlog #5).
+
+## 2. Where it fits
+
+```mermaid
+flowchart LR
+    subgraph Client["User's AI assistant (MCP client)"]
+        AI["Claude / Copilot / Cursor"]
+    end
+    subgraph Prism["Prism API (Spring Boot)"]
+        MCP["MCP endpoint /mcp<br/>(com.prism.mcp)"]
+        ADV["Advisor services<br/>catalog · schema review · metric draft"]
+        CAT[("Catalog files<br/>owner-curated, in git")]
+        QB["MetricQueryBuilder · MetricType<br/>(existing)"]
+        SVC["SprintMetricsService<br/>(existing, Analyst only)"]
+        REST["REST API /api/** + React UI<br/>(unchanged)"]
+    end
+    DS[("Data sources<br/>(client STAR schema)")]
+    AI -- "Streamable HTTP" --> MCP
+    MCP --> ADV
+    ADV --> CAT
+    ADV --> QB
+    MCP -. "phase 4" .-> SVC
+    SVC --> DS
+    REST --> SVC
+```
+
+- **One new package, `com.prism.mcp`**, inside the existing API, with its own endpoint (`/mcp`). The REST API and
+  the UI don't change.
+- **Advisor tools reuse the real calculation code.** `draft_metric` builds its SQL preview with the same
+  `MetricQueryBuilder` the charts use, so what the Advisor shows is exactly what Prism would run. It never
+  *executes* that SQL.
+- **The Analyst reaches data only through `SprintMetricsService`**: the same metadata cache, query builder and
+  bound parameters as the charts, so the parity check (`tools/parity`) covers its numbers too. There is no tool
+  that accepts SQL, table names or column names.
+
+### 2.1 Where it runs, by phase
+
+| Phase | Runs | Why |
+|---|---|---|
+| 1 (Advisor, local) | Inside the Prism API, switched on by a property (`prism.mcp.enabled=true`, off by default) | Simplest; reuses the code directly; no hosting |
+| 2+ (community library) | A **central Advisor service**, extracted from `com.prism.mcp` | Prism deployments are per cloud and per enterprise (OVERVIEW §3.1), but the community library must be shared by all clients, so it can't live in one deployment |
+
+To keep that extraction cheap, `com.prism.mcp` may depend only on `MetricType`, `MetricDefinition`,
+`MetricQueryBuilder` and its own classes. Controllers, the users code and JDBC are off limits for the Advisor. When
+it's extracted, those shared classes move to a small `prism-core` Maven module used by both applications.
+
+## 3. Technology
+
+- **Spring AI 1.1.x** (the Spring Boot 3 line; Spring AI 2.x targets Spring Boot 4), starter
+  `spring-ai-starter-mcp-server-webmvc`, transport **Streamable HTTP**. Server features are declared with Spring
+  AI's MCP annotations (`@McpTool`, `@McpResource`, `@McpPrompt`) on ordinary Spring beans.
+  _Open:_ exact 1.1.x patch version, confirmed by the first build on the owner's machine (Maven Central isn't
+  reachable from Claude sessions).
+- **Schema review parsing: JSqlParser.** It's already planned for the metric admin screens' validation (roadmap
+  #5), so adding it here starts that work rather than duplicating it.
+- **Conventions as everywhere else** (CLAUDE.md): category loggers, `log.debug("Started")` in every method,
+  `PerformanceLog.time(...)` around each tool call, records for inputs and outputs, constructor injection.
+- **Tests:** tool logic lives in plain services with plain JUnit tests. One smoke test checks that the server
+  lists its tools, resources and prompts. Manual testing uses the MCP Inspector (`npx @modelcontextprotocol/inspector`).
+
+## 4. Phase 1: the Advisor (local)
+
+### 4.1 Resources
+
+| URI | Content |
+|---|---|
+| `prism://guide/star-schema` | Designing Prism-compatible fact and dimension tables: grain, additive columns, keys, hierarchy columns as focus levels, NULLs, time dimension |
+| `prism://guide/metric-types` | Percentage, Ratio, Average, Sum; row conditions; why ratio of sums (the 38 % example); no Count; planned Percentile |
+| `prism://guide/drill-down` | Focus areas and levels, display order vs drill order, standalone levels |
+| `prism://guide/improvement-paths` | Levels and order of improvement ("it's never just one thing", OVERVIEW §8.3) |
+| `prism://catalog/metrics` | Index of catalog entries (name, problem, tags) |
+| `prism://catalog/metrics/{id}` | One metric: problem it addresses, Prism type, numerator / denominator / condition, required fact columns and grain, pitfalls, prerequisites, related metrics |
+
+**Catalog source:** Markdown files with a small YAML header, under `src/main/resources/advisor/`. They are
+owner-curated and versioned in git, so a catalog change is reviewed like code. The server loads them at startup.
+_Open:_ the format (Markdown + YAML header is the suggestion: readable on GitHub, easy to edit).
+
+Example catalog entry header:
+
+```yaml
+id: change-failure-rate
+name: Change Failure Rate
+problem: [failed deployments, production incidents, release quality]
+type: percentage
+numerator: deployments that caused a failure in production
+denominator: all production deployments
+grain: one row per deployment (or per team × period with both counts)
+prerequisites: [consistent definition of "failure", deployments attributed to a team or service]
+related: [deployment-frequency, branch-duration, mutation-score]
+```
+
+### 4.2 Tools
+
+| Tool | Input | Output |
+|---|---|---|
+| `search_metric_catalog` | `problem` (free text), optional `tags` | Matching catalog entries, best first (keyword and tag match; deterministic) |
+| `draft_metric` | `name`, `type`, `numerator`, `denominator` (percentage/ratio), `row_condition`, `decimals`, `unit` | Validation result; a ready `Metrics` INSERT; the exact SQL Prism would run (from `MetricQueryBuilder`, against a stated fact/dimension example); warnings |
+| `review_star_schema` | `ddl` (CREATE TABLE statements, ≤ 64 KB) | Findings: `{severity, table, column, rule, message, suggestion}`, and suggested focus areas/levels |
+
+**`review_star_schema` initial rules** (each with an ID, so findings can be explained and improved):
+
+| Rule | Checks |
+|---|---|
+| S1 grain | The fact table's grain is clear: a primary key, or a unique constraint on its dimension keys |
+| S2 stored ratios | Fact columns that look like stored percentages, ratios or averages (`pct`, `percent`, `ratio`, `avg`, `rate`) → store the numerator and denominator instead |
+| S3 additive measures | Measures are numeric; NOT NULL or a deliberate NULL meaning |
+| S4 dimension keys | Every dimension key in the fact table has a matching dimension table and key |
+| S5 hierarchies | Dimension columns that form a hierarchy (`level_1`…`level_n`, year → quarter → month) → suggested focus levels and drill order |
+| S6 NULL labels | Nullable hierarchy columns → they will show as an empty label; decide whether that's intended |
+| S7 time | A time dimension exists (or a date key) so metrics can be sliced by period |
+| S8 per-item grain | Columns like durations on a summary-grain fact → percentiles will need one row per item |
+
+**`draft_metric` checks:** type vs numerator/denominator (same rule as the metadata cache); identifiers only in a
+safe form (the same `;`/comment guard as the builder, later the JSqlParser allow-list); a warning when the
+numerator or denominator looks like a stored percentage; a warning for Average on a column that is likely a
+per-row ratio (average of averages).
+
+### 4.3 Prompts
+
+| Prompt | Arguments | Guides the assistant to |
+|---|---|---|
+| `choose-metrics` | `struggle` | Clarify the goal (count vs rate, outcome vs behavior), search the catalog, propose metrics with their prerequisites, flag missing threads |
+| `design-star-schema` | `description` of the data the team has | Propose fact and dimension tables at the right grain, run `review_star_schema`, iterate |
+| `review-schema` | `ddl` | Run `review_star_schema`, explain each finding, propose fixes and focus levels |
+
+### 4.4 Safety rules (phase 1)
+
+- **No database access at all.** The Advisor reads its own catalog files and calls pure functions. `draft_metric`
+  builds SQL text and never runs it.
+- **No client data.** DDL a user pastes is processed in memory and not stored or logged (only sizes and rule
+  counts are logged).
+- **Input limits:** DDL ≤ 64 KB, text arguments ≤ 4 KB, so a request can't tie up the server.
+- **Off by default** (`prism.mcp.enabled=false`), and only on `localhost` until authentication exists.
+
+### 4.5 Connecting an assistant (local)
+
+- **MCP Inspector** (to try tools by hand): `npx @modelcontextprotocol/inspector`, then connect to
+  `http://localhost:8080/mcp`.
+- **Claude Code:** `claude mcp add --transport http prism http://localhost:8080/mcp`.
+- **Claude desktop:** add it as a custom connector, or through a local bridge such as `mcp-remote`.
+  _Open:_ confirm the steps when we first try it.
+
+## 5. Later phases
+
+| Phase | Adds | Needs |
+|---|---|---|
+| 2. Capture and curation | `submit_insight` tool (the user approves exactly what is sent); `Insight_Submissions` table (status: submitted → accepted / rejected, curator notes); review queue screen; accepted insights become catalog entries | A database for the Advisor (central service) |
+| 3. Accounts and the community | Authentication per the MCP authorization spec (OAuth); enterprise from the token; enterprise-private notes; give-to-get access to the community library (OVERVIEW §8.2); audit of submissions | Backlog #5 (sessions), contract terms |
+| 4. Analyst | `list_metrics`, `list_focus_levels`, `get_metric_data` (names in, resolved to IDs, through `SprintMetricsService`); optional `compare_periods` | Phase 3 (the enterprise must come from the token), read-only data-source login (roadmap #3) |
+| 5. Drivers | "What drives this?" tool: within-team, lagged and conditional relationships (OVERVIEW §8.4) | Fact/dimension model, working-practice dimensions, incidents fact |
+
+## 6. Open decisions
+
+1. **Phase 1 inside the Prism API** (recommended; extract later) **or a separate application from the start.**
+2. **Catalog format:** Markdown + YAML header (recommended) or pure YAML/JSON.
+3. **JSqlParser now** for `review_star_schema` (recommended; reused by the admin screens) **or simple text
+   rules first.**
+4. **Who writes the first catalog entries:** Claude drafts (DORA, flow, predictability, quality), the owner
+   reviews and decides what Prism stands behind.
+
+Sources: [Spring AI 1.1 GA](https://spring.io/blog/2025/11/12/spring-ai-1-1-GA-released/) ·
+[Spring AI MCP Boot Starters](https://spring.io/blog/2025/09/16/spring-ai-mcp-intro-blog) ·
+[Streamable-HTTP MCP servers](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-streamable-http-server-boot-starter-docs.html)
