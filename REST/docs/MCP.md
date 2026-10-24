@@ -134,7 +134,7 @@ related: [deployment-frequency, branch-duration, mutation-score]
 
 | Rule | Checks |
 |---|---|
-| S1 grain | The fact table's grain is clear: a primary key, or a unique constraint on its dimension keys |
+| S1 grain | One row per combination of the lowest-level dimension keys: a primary key or unique constraint on exactly those keys (no duplicates). Gaps are fine (N/A); never suggest filling them with zero rows (OVERVIEW §4.1) |
 | S2 stored ratios | Fact columns that look like stored percentages, ratios or averages (`pct`, `percent`, `ratio`, `avg`, `rate`) → store the numerator and denominator instead |
 | S3 additive measures | Measures are numeric; NOT NULL or a deliberate NULL meaning |
 | S4 dimension keys | Every dimension key in the fact table has a matching dimension table and key |
@@ -197,9 +197,12 @@ per-row ratio (average of averages).
 | Spring AI 1.1.0 BOM + `spring-ai-starter-mcp-server-webmvc` | `pom.xml` |
 | Server settings: off by default (`prism.mcp.enabled`), Streamable HTTP, SYNC, name `prism-advisor`, instructions | `application.properties` |
 | Local-only guard on `/mcp` (loopback only; others get 403 and an `MCP_REQUEST_REJECTED` audit line) | `McpConfig` |
-| Resource `prism://guide/metric-types` | `AdvisorResources`, `AdvisorGuides`, `resources/advisor/guides/metric-types.md` |
+| Resources: 4 guides (`metric-types`, `star-schema`, `drill-down`, `improvement-paths`) | `AdvisorResources`, `AdvisorGuides`, `resources/advisor/guides/*.md` |
+| Resources: catalog index `prism://catalog/metrics` and entries `prism://catalog/metrics/{id}` | `AdvisorResources`, `MetricCatalog`, `CatalogEntry`, `resources/advisor/catalog/*.md` |
+| Catalog (15 entries; owner review pending). Delivery/quality: change failure rate, deployment frequency, branches merged within a day, open branches, mutation score. Predictability/flow (from the owner's *Agile Metrics* articles): WIP per assignee, feature WIP per team, scope done by mid-sprint, last-day completion, scope churn (with variants), points added mid-sprint, net scope change, commitment strength, Say/Do, velocity | `resources/advisor/catalog/` |
 | Tool `draft_metric` | `AdvisorTools` → `MetricDraftService` → `MetricDraft` |
-| Unit tests (17) | `MetricDraftServiceTests`, `AdvisorGuidesTests` |
+| Tool `search_metric_catalog` | `AdvisorTools` → `MetricCatalog.search` |
+| Unit tests (25), incl. "every catalog entry is a valid Prism metric with no warnings" | `MetricDraftServiceTests`, `AdvisorGuidesTests`, `MetricCatalogTests` |
 
 **Try it** (on the owner's Mac):
 
@@ -215,7 +218,9 @@ name `Change Failure Rate`, type `percentage`, numerator `smf.failed_deployments
 returns `valid: true`, an INSERT and the SQL preview. Try type `count` or a numerator `smf.pass_rate` to see an
 error and a warning.
 
-Checked in the Claude session (no Maven access there): compiled with `-Xlint:all -Werror` against stand-ins for
+Skeleton verified on the owner's Mac (2026-10-22): resource and `draft_metric` work in the Inspector.
+
+Checked in the Claude session for the skeleton (no Maven access there): compiled with `-Xlint:all -Werror` against stand-ins for
 Spring AI, the MCP SDK and the servlet API; the 17 tests pass; the generated INSERT runs against the real
 `Metrics` table (and is skipped when re-run); the preview SQL runs against the demo data. **Not yet checked:** the
 real Spring AI annotations and auto-configuration. That needs the first Maven build and the Inspector run.

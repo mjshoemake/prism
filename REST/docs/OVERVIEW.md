@@ -127,6 +127,17 @@ own STAR schema (e.g. in its own cloud account), and Prism reaches it as a *data
 STAR schema allowed inside the Prism database is the demo/prototype one, and even that is registered as an
 ordinary data source, so it uses the same code path as a client's.
 
+#### Rule: one row per combination of the lowest-level dimensions (owner, Oct 2026)
+
+A fact table's grain is the combination of the lowest level of each of its dimensions: the demo has exactly one row
+per sprint and team; a fact with five dimensions has one row per five-way combination.
+
+- **No duplicates**, ever (a unique key on the dimension keys).
+- **Gaps are allowed and mean N/A, never zero.** A team that first appears in sprint 6 has no rows for sprints 1–5.
+  Prism must never fill missing combinations with zeros: no bar, no contribution to sums or ratios, skipped by
+  averages. Any future feature that lines up series (dashboards, "what drives this?", period comparisons) must keep
+  gaps as gaps. A real zero (the team existed and delivered nothing) is a stored row of zeros.
+
 **Today (demo data):** three tables in the `prism` schema serve as the prototype data set:
 
 | Table | Holds |

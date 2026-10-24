@@ -31,9 +31,14 @@ src/main/java/com/prism/
 │   ├── common/utils/
 │   │   └── SecurityUtils.java       BCrypt hash/verify, BCRYPT_COST = 12
 │   ├── mcp/                         MCP server: Prism Advisor (docs/MCP.md); off unless prism.mcp.enabled=true
-│   │   ├── AdvisorResources.java    @McpResource: prism://guide/metric-types (Markdown from resources/advisor/guides)
-│   │   ├── AdvisorTools.java        @McpTool draft_metric → MetricDraftService (timed, never touches a database)
+│   │   ├── AdvisorResources.java    @McpResource: prism://guide/{metric-types,star-schema,drill-down,improvement-paths},
+│   │   │                            prism://catalog/metrics (index), prism://catalog/metrics/{id} (one entry)
+│   │   ├── AdvisorTools.java        @McpTool draft_metric → MetricDraftService; search_metric_catalog → MetricCatalog
+│   │   │                            (timed; never touch a database)
 │   │   ├── AdvisorGuides.java       guide list + loader (classpath advisor/guides/<id>.md, only listed IDs)
+│   │   ├── MetricCatalog.java       catalog loader (classpath*:advisor/catalog/*.md, YAML header via SnakeYAML),
+│   │   │                            index, deterministic word search (problems/name 3, tags/summary 2, body 1)
+│   │   ├── CatalogEntry.java        record: one catalog entry (header fields + body + full text)
 │   │   ├── MetricDraftService.java  draft_metric rules (type/denominator, limits, forbidden sequences), warnings
 │   │   │                            (stored ratios, average of ratios), re-runnable Metrics INSERT, SQL preview via
 │   │   │                            the real MetricQueryBuilder
@@ -75,6 +80,7 @@ tools/parity/                        metric parity check (README.md): run.sh, fi
 src/main/resources/
 ├── application.properties           incl. per-category log levels (logging.level.<Category>); MCP server settings
 ├── advisor/guides/*.md              Advisor guides (owner-curated content, served as MCP resources)
+├── advisor/catalog/*.md             metric catalog: Markdown + YAML header (id = file name; owner-curated)
 ├── logback-spring.xml               appenders: console; logs/audit.log + logs/perf.log (daily roll)
 └── static/   BUILD OUTPUT of frontend/ (`npm run build`) — do not edit; git-ignored
 src/test/java/com/prism/api/
@@ -85,6 +91,7 @@ src/test/java/com/prism/api/
 │                                          + ParityCase (case keys), ParityResults (text format, comparison)
 ├── mcp/MetricDraftServiceTests.java       plain JUnit (draft_metric rules, warnings, INSERT quoting, preview)
 ├── mcp/AdvisorGuidesTests.java           plain JUnit (guides load; unknown IDs refused)
+├── mcp/MetricCatalogTests.java           plain JUnit (every entry loads, links exist, is a valid Prism metric; search)
 └── common/utils/SecurityUtilsTests.java   plain JUnit, no Spring context
 src/test/java/com/prism/common/utils/LogUtilsTests.java   plain JUnit (records, masking, cycles, duration)
 ```

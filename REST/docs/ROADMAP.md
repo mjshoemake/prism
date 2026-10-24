@@ -11,9 +11,13 @@ _Last updated: 2026-10-22._
 
 ## 1. Waiting on the owner
 
-1. **Try the MCP Advisor skeleton** (branch `feature-MCP-Server`): build, run with `--prism.mcp.enabled=true`,
-   check the resource and `draft_metric` in the MCP Inspector (steps: `docs/MCP.md` §7). Paste any build or
-   startup error.
+1. **Review the Advisor content** (branch `feature-MCP-Server`; it's your product knowledge, drafted by Claude):
+   - guides in `src/main/resources/advisor/guides/` (metric types, STAR schema, drill-down, improvement paths);
+   - catalog entries in `src/main/resources/advisor/catalog/` (15 metrics; the predictability and flow entries,
+     the coaching principles and the predictability path come from the owner's *Agile Metrics* articles).
+   Article URLs are added to the content once the series is further along (owner, 2026-10-23).
+   Then rebuild, run with `--prism.mcp.enabled=true`, and in the Inspector try the new resources and
+   `search_metric_catalog` (e.g. "too many failed deployments").
 
 Done: parity baseline frozen and committed, retired scripts deleted (2026-10-22: 23,557 cases, 118,168 rows,
 0 differences); obsolete files deleted, migrations 010–012 run, Year / Quarter / Month filtering confirmed through
@@ -62,9 +66,8 @@ the real JDBC driver (2026-10-21).
 6. **Schema reading** for client data sources (list tables and columns, suggest joins from foreign keys).
 7. **Calculation templates / Custom type** (free-form expression through the same parser).
 8. **Prism Advisor and community library** (MCP; vision in OVERVIEW §8, design in [MCP.md](MCP.md)). Being built
-   on `feature-MCP-Server` ahead of the fact/dimension work (owner, 2026-10-22); skeleton done (§1 item 1). Next:
-   the remaining guides, the first catalog entries (Claude drafts, owner reviews), `search_metric_catalog`,
-   `review_star_schema` (JSqlParser), the three prompts.
+   on `feature-MCP-Server` ahead of the fact/dimension work (owner, 2026-10-22); skeleton verified 2026-10-22; guides, catalog drafts and `search_metric_catalog` done (owner review: §1).
+   Next: `review_star_schema` (JSqlParser), the three prompts.
    - Advisor: owner-curated metric catalog, guides, `review_star_schema` and `draft_metric` tools, guided prompts;
    - capture (`submit_insight`) and a curation queue; then give-to-get community access and enterprise-private
      knowledge once authentication exists (#4);
@@ -93,6 +96,8 @@ the real JDBC driver (2026-10-21).
 - No client STAR data in the Prism DB (demo schema only). The main path is a direct read-only connection;
   client APIs are a second phase.
 - No Metric Groups: the fact table plays that role.
+- Fact grain = one row per combination of the lowest-level dimensions; no duplicates; gaps mean N/A, never zero
+  (OVERVIEW §4.1).
 - Community library (OVERVIEW §8.2): give to get. Contributors get the collective knowledge, others are walled off
   from it (the Prism-authored base layer stays available to all). What's shared is knowledge about using data
   (calculation options, dimension designs, pitfalls, improvement paths, cross-client findings as direction and

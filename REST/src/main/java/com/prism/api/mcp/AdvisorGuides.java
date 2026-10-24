@@ -35,7 +35,18 @@ public class AdvisorGuides {
             new Guide("metric-types", "Prism metric types",
                     "How Prism calculates metrics: the four types (percentage, ratio, average, sum), row conditions, "
                             + "why ratios are a ratio of sums and never an average of percentages, percentiles, and "
-                            + "how to choose a type."));
+                            + "how to choose a type."),
+            new Guide("star-schema", "Designing Prism-compatible fact and dimension tables",
+                    "How to shape fact and dimension tables for Prism: grain, counts instead of stored ratios, "
+                            + "time and organization dimensions, working practices as dimensions, labels and NULLs, "
+                            + "and a checklist."),
+            new Guide("drill-down", "Focus areas, focus levels and drill-down",
+                    "How Prism slices and drills: focus areas on dimensions, focus levels as columns, display vs "
+                            + "drill order, standalone levels, filters carried across areas, and label gotchas."),
+            new Guide("improvement-paths", "Improvement paths: it's never just one thing",
+                    "Ordered improvement paths instead of single best practices: foundation vs conditional "
+                            + "practices, the quality path (test quality, coverage, continuous integration, batch "
+                            + "size), readiness checks, test-quality measures and traps such as gamed targets."));
 
     private final Map<String, String> texts = new ConcurrentHashMap<>();
 

@@ -14,6 +14,8 @@ sprint, month, quarter, year), so a number is always right for the level you are
 | **Sum** | value | `SUM(value)` | fit to data | total story points; sprints with zero churn (value `1`, condition below) |
 
 - A **zero denominator** gives an empty value (no bar), not an error.
+- A **missing row** (e.g. a team that didn't exist yet) means N/A, not zero: it adds nothing to a sum or ratio
+  and an Average skips it.
 - There is **no Count type**: a count is a Sum of `1` with a row condition (e.g. value `1`, condition
   `smf.story_points_added_during_sprint + smf.story_points_removed_during_sprint = 0` counts sprints with no churn).
 - Values are rounded to the metric's **decimal places** (0–6, default 2).

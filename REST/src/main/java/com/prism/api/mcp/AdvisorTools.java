@@ -1,5 +1,7 @@
 package com.prism.api.mcp;
 
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.springaicommunity.mcp.annotation.McpTool;
 import org.springaicommunity.mcp.annotation.McpToolParam;
@@ -17,10 +19,32 @@ public class AdvisorTools {
 
     private static final Logger log = LogCategory.CONTROLLER.logger(AdvisorTools.class);
 
-    private final MetricDraftService metricDraft;
+    /** Longest problem description accepted (docs/MCP.md §4.4). */
+    static final int MAX_PROBLEM = 4000;
 
-    public AdvisorTools(MetricDraftService metricDraft) {
+    private final MetricDraftService metricDraft;
+    private final MetricCatalog catalog;
+
+    public AdvisorTools(MetricDraftService metricDraft, MetricCatalog catalog) {
         this.metricDraft = metricDraft;
+        this.catalog = catalog;
+    }
+
+    @McpTool(name = "search_metric_catalog", description = """
+            Find curated metrics for a problem a team or leader describes, e.g. "too many failed deployments" or \
+            "sprints keep missing commitments". Returns up to 5 entries, best first, each with its improvement level \
+            (foundation, conditional, outcome), Prism type, summary and URI. Read an entry's URI for how to \
+            calculate it, the data it needs and its pitfalls, and prism://guide/improvement-paths before \
+            recommending changes: it's never just one thing.""")
+    public List<MetricCatalog.Hit> searchMetricCatalog(
+            @McpToolParam(description = "The problem or goal in plain words.", required = true) String problem) {
+        log.debug("Started");
+        return PerformanceLog.time("AdvisorTools.searchMetricCatalog", () -> {
+            if (problem != null && problem.length() > MAX_PROBLEM) {
+                throw new IllegalArgumentException("The problem description is longer than " + MAX_PROBLEM + " characters.");
+            }
+            return catalog.search(problem);
+        });
     }
 
     @McpTool(name = "draft_metric", description = """
