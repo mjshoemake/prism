@@ -5,7 +5,8 @@
 > [UI developer guide](../frontend/docs/DEVELOPER_GUIDE.md) · [API codebase guide](../CLAUDE.md)
 >
 > Throughout this document, **Today** describes the code as it exists now and **Target** describes the
-> agreed design it is moving toward. The current code is a working prototype of one metric.
+> agreed design it is moving toward. The current code is a working prototype: five demo metrics with drill-down,
+> user administration, and the first version of the Prism Advisor (MCP).
 
 ---
 

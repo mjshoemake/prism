@@ -73,10 +73,22 @@ class MetricParityTests {
         }
         var url = System.getProperty("prism.parity.url", app.getProperty("spring.datasource.url"));
         var user = System.getProperty("prism.parity.username", app.getProperty("spring.datasource.username"));
-        var password = System.getProperty("prism.parity.password", app.getProperty("spring.datasource.password", ""));
+        // Same sources as application.properties' ${PRISM_DB_PASSWORD:${PGPASSWORD:}} (a plain Properties load doesn't
+        // resolve placeholders).
+        var password = System.getProperty("prism.parity.password", firstNonBlank(System.getenv("PRISM_DB_PASSWORD"),
+                System.getenv("PGPASSWORD"), ""));
         var fixtureUrl = System.getProperty("prism.parity.fixture-url", url.replaceFirst("/[^/?]+(\\?|$)", "/prism_fixture$1"));
         demo = new Database(url, user, password);
         fixture = new Database(fixtureUrl, user, password);
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (var value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 
     @AfterAll

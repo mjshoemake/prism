@@ -109,10 +109,11 @@ comments. A baseline header is the case key `metric | level | filters`. An expec
 `description | metric | level | filters`. Filters are `-` or `Level=value` joined by ` & `, with `\N` for IS NULL.
 Backslash escapes `\ | & = #` and line breaks inside names and values.
 
-## Retired one-off scripts
+## History
 
-`parity.py`, `Gen.java` and `cmp.py` were the one-off SQL/012 check (old hand-written queries vs the new builder,
-through `psql`). The permanent check replaces them once the first baseline is frozen; delete them then.
+The first parity check (SQL/012, Oct 2026) was a one-off: hand-written "old" queries against the new builder,
+through `psql` (24,160 cases, 120,580 rows, 0 differences). This permanent check replaced it; the one-off scripts
+were removed once the first baseline was frozen.
 
 ## Limitations
 

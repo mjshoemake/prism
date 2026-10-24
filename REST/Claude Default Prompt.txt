@@ -1,1 +1,0 @@
-Read REST/OVERVIEW.md, REST/CLAUDE.md, REST/docs/ROADMAP.md, and note what other *.md files are available that you may need to review later (MCP, if we're working on the MCP Server, etc.). Then let’s continue.

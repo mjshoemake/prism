@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS prism."Focus_Areas"
 
 ALTER TABLE IF EXISTS prism."Focus_Levels"
     OWNER to postgres;
-    
-    
-    
+
+-- Seed the two demo focus areas (corrected Oct 2026: they were originally entered by hand, so a fresh database
+-- failed at 009, which adds a foreign key from Focus_Levels to Focus_Areas).
+INSERT INTO prism."Focus_Areas" (focus_area_pk, name, column_name)
+VALUES (1, 'Time', ''), (2, 'Organization', '')
+ON CONFLICT DO NOTHING;

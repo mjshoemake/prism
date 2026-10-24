@@ -9,17 +9,16 @@ _Last updated: 2026-10-22._
 
 ---
 
-## 1. Waiting on the owner
+## 1. In review
 
-1. **Review the Advisor content** (branch `feature-MCP-Server`; it's your product knowledge, drafted by Claude):
+1. **Advisor content** (drafted by Claude, reviewed by the owner, whose product knowledge it records):
    - guides in `src/main/resources/advisor/guides/` (metric types, STAR schema, drill-down, improvement paths);
    - catalog entries in `src/main/resources/advisor/catalog/` (15 metrics; the predictability and flow entries,
      the coaching principles and the predictability path come from the owner's *Agile Metrics* articles).
    Article URLs are added to the content once the series is further along (owner, 2026-10-23).
-   Then rebuild, run with `--prism.mcp.enabled=true`, and in the Inspector try the new resources and
-   `search_metric_catalog` (e.g. "too many failed deployments").
+   Try it: run with `--prism.mcp.enabled=true` and use the MCP Inspector (`docs/MCP.md` §7).
 
-Done: parity baseline frozen and committed, retired scripts deleted (2026-10-22: 23,557 cases, 118,168 rows,
+Done: repository cleanup for public viewing, root README, fresh-database setup script (2026-10-23); parity baseline frozen and committed, retired scripts deleted (2026-10-22: 23,557 cases, 118,168 rows,
 0 differences); obsolete files deleted, migrations 010–012 run, Year / Quarter / Month filtering confirmed through
 the real JDBC driver (2026-10-21).
 
@@ -84,7 +83,6 @@ the real JDBC driver (2026-10-21).
 ## 3. Smaller backlog items (see CLAUDE.md "Open issues")
 
 - #6 CORS (`file://`, `null`): revisit before deployment; add test/prod origins when known.
-- #7 database credentials committed in `application.properties`.
 - #8 "works identically" check vs the old Groovy code on a live DB (deferred by owner).
 - #9 `test.bat` points to a stale jar name.
 - `Enterprises.temp_password_hash` is unused: drop it in a later script.

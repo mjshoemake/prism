@@ -39,3 +39,6 @@ src/main/resources/static/
 
 ### Runtime logs (audit.log, perf.log) ###
 logs/
+
+### Local settings (database password for run.sh) ###
+.env.local

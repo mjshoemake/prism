@@ -118,16 +118,8 @@ VALUES (1,
 		now(),
 		now());
 
-INSERT INTO "prism"."Users" (enterprise_pk,
-                             email,
-                             username,
-                             password_hash,
-                             password_algo,
-                             password_params
-)
-VALUES (1, 
-        'atlantatechie@gmail.com',
-        'atlantatechie@gmail.com',
-        '$2a$12$7VT0Jd3.j0Z75UtTd0eUxOj6R9Nl/.nM7J73jytPNb9i/6897dl6O',
-        'bcrypt',
-        '{}');
+-- No user is seeded here (corrected Oct 2026: the original script seeded the owner's account).
+-- Create the first user through the API, which generates a one-time temporary password (README "Run it"):
+--   curl -s -X POST http://localhost:8080/api/users -H 'Content-Type: application/json' \
+--        -d '{"enterprise_pk": 1, "email": "you@example.com"}'
+-- There is deliberately no shared default password (docs/OVERVIEW.md §6).

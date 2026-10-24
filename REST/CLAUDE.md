@@ -11,6 +11,7 @@ _Last updated: 2026-10-22, after the MCP Advisor skeleton (branch feature-MCP-Se
 - Data access is **raw SQL via `JdbcTemplate`** returning `List<Map<String,Object>>` / `Map<String,Object>`. No JPA entities exist, even though `spring-boot-starter-data-jpa` is on the classpath (`ddl-auto=none`).
 - **Spring AI 1.1.x** (`spring-ai-bom`, Spring Boot 3 line) for the MCP server: `spring-ai-starter-mcp-server-webmvc`, annotations in `org.springaicommunity.mcp.annotation` (they move to `org.springframework.ai.mcp.annotation` in Spring AI 2.x).
 - PostgreSQL (`jdbc:postgresql://localhost:5432/playpen`, schema `prism`). BCrypt via `spring-security-crypto` (no Spring Security filter chain — endpoints are unauthenticated).
+- **New database:** `bash SQL/setup.sh` (creates `playpen` and runs every script in order; fresh databases only). First user: `POST /api/users` (see the root README). Password: set `PRISM_DB_PASSWORD` or `PGPASSWORD` before `./run.sh`.
 - Build: `./build.sh` / `build.bat` from `REST/` (runs `npm run build` in `frontend/`, then `mvn clean package`). Run: `./run.sh` (`java -jar target/prism-api-1.0.0.jar`; extra arguments go to Spring Boot, e.g. `./run.sh --prism.mcp.enabled=true`). `test.bat` references a stale jar name (`api-0.0.1-SNAPSHOT.jar`).
 
 ## Source map
@@ -75,8 +76,9 @@ src/main/java/com/prism/
         │                            the level is off. Tests: src/test/.../common/utils/LogUtilsTests
         └── StringUtils.java         padding, dates, CSV, tokenizing helpers. NOTE: same simple name as
                                      org.springframework.util.StringUtils (used in controllers) — qualify one
+ci/Jenkinsfile                       Jenkins pipeline (Windows agent: build REST, stop and redeploy the jar)
 tools/parity/                        metric parity check (README.md): run.sh, fixture/ (hand-checked dataset + expected.tsv),
-                                     baseline/demo-baseline.txt (frozen); parity.py/Gen.java/cmp.py = retired SQL/012 one-off
+                                     baseline/demo-baseline.txt (frozen)
 src/main/resources/
 ├── application.properties           incl. per-category log levels (logging.level.<Category>); MCP server settings
 ├── advisor/guides/*.md              Advisor guides (owner-curated content, served as MCP resources)
@@ -96,7 +98,7 @@ src/test/java/com/prism/api/
 src/test/java/com/prism/common/utils/LogUtilsTests.java   plain JUnit (records, masking, cycles, duration)
 ```
 
-Example chart request body: `Documentation/SprintMetricsExample.json`.
+Example chart request body: `docs/chart-request-example.json`.
 
 ## Frontend (`REST/frontend/`)
 
@@ -163,7 +165,7 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 4. ~~`user_id` binding bug~~ **fixed Oct 2026** (all user queries bind a `UUID`; malformed IDs → 400/404).
 5. **No authentication** on any endpoint; `change-password` trusts the `X-User-ID` header. Consequences to fix with sessions: the server must take the enterprise from the session (not `?enterprisePk` / `enterprise_pk`), block users with `is_temp_password` from everything except change-password, and refuse self-deactivation. Future: super-users spanning enterprises get an enterprise picker; a list never mixes enterprises.
 6. CORS allows `"null"` and `"file://"` origins with credentials (for opening static pages from disk) and only `http://localhost:8080` — revisit before deployment. Test/production URLs are TBD; their origins (or a per-environment property) must be added then. All `localhost` addresses in docs mean a local install.
-7. DB credentials are committed in `application.properties`.
+7. ~~DB credentials committed~~ **fixed Oct 2026**: `spring.datasource.password=${PRISM_DB_PASSWORD:${PGPASSWORD:}}` (environment only; the earlier local dev password is still in git history).
 8. "Works identically" verification against a live DB was deferred.
 9. `test.bat` jar name is stale.
 10. Frontend: session is just the stored login response (no token); temp-password and enterprise rules are UI-enforced only (see #5). (Filters persisting across focus-area changes is intended — it's how a selection is "rotated" onto another dimension.)

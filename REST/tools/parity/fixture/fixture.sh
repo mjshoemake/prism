@@ -31,10 +31,6 @@ run() { "${PSQL_BASE[@]}" -d "$DB" -q -v ON_ERROR_STOP=1 "$@" >/dev/null; }
 for script in "$sql_dir"/[0-9][0-9][0-9]-*.sql; do
   number=$(basename "$script" | cut -c1-3)
   case "$number" in 002|003|004) continue;; esac          # demo data: the fixture has its own rows
-  if [ "$number" = 009 ]; then
-    # Focus areas were seeded by hand in the original database; 009 needs them for its foreign key.
-    run -c "INSERT INTO \"prism\".\"Focus_Areas\" (focus_area_pk, name, column_name) VALUES (1, 'Time', ''), (2, 'Organization', '')"
-  fi
   run -f "$script"
 done
 run -f "$here/fixture-data.sql"

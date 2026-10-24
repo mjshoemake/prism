@@ -1,4 +1,11 @@
-.idea/misc.xml
-.idea/modules.xml
-.idea/prism.iml
-.idea/vcs.xml
+# macOS, IDEs
+.DS_Store
+.idea/
+*.iml
+.vscode/
+
+# Build output
+**/target/
+
+# Local scratch
+Temp/
