@@ -5,11 +5,11 @@
 > **what to build next** is in [ROADMAP.md](ROADMAP.md). This file is the technical design: where the server
 > runs, what it exposes, the safety rules, and the phases.
 >
-> Status: **phase 1 skeleton built (Oct 2026, branch `feature-MCP-Server`)**: the `/mcp` endpoint, one resource
-> (`prism://guide/metric-types`) and one tool (`draft_metric`). The rest of phase 1 is still design. Decisions still
-> open are marked _Open_.
+> Status: **phase 1 built (Oct 2026, branches `feature-MCP-Server` and `feature-MCP-Server-P2`)**: the `/mcp`
+> endpoint, the guides and metric catalog as resources, the three tools and the three prompts (§7). Owner review
+> of the content is pending. Decisions still open are marked _Open_.
 
-_Last updated: 2026-10-22._
+_Last updated: 2026-10-24._
 
 ---
 
@@ -128,7 +128,7 @@ related: [deployment-frequency, branch-duration, mutation-score]
 |---|---|---|
 | `search_metric_catalog` | `problem` (free text), optional `tags` | Matching catalog entries, best first (keyword and tag match; deterministic) |
 | `draft_metric` | `name`, `type`, `numerator`, `denominator` (percentage/ratio), `row_condition`, `decimals`, `unit` | Validation result; a ready `Metrics` INSERT; the exact SQL Prism would run (from `MetricQueryBuilder`, against a stated fact/dimension example); warnings |
-| `review_star_schema` | `ddl` (CREATE TABLE statements, ≤ 64 KB) | Findings: `{severity, table, column, rule, message, suggestion}`, and suggested focus areas/levels |
+| `review_star_schema` | `ddl` (CREATE TABLE / ALTER TABLE statements, ≤ 64 KB) | A summary; each table's role (fact, dimension, unknown) with the reason and each fact's grain; findings `{severity (error, warning, note), rule, table, column, message, suggestion}`, errors first; suggested focus areas with drill levels (top first) and standalone levels; the first words of skipped statements |
 
 **`review_star_schema` initial rules** (each with an ID, so findings can be explained and improved):
 
@@ -142,6 +142,14 @@ related: [deployment-frequency, branch-duration, mutation-score]
 | S6 NULL labels | Nullable hierarchy columns → they will show as an empty label; decide whether that's intended |
 | S7 time | A time dimension exists (or a date key) so metrics can be sliced by period |
 | S8 per-item grain | Columns like durations on a summary-grain fact → percentiles will need one row per item |
+| S0 could not read | A CREATE TABLE that JSqlParser can't parse (warning: that table isn't reviewed); no tables found, empty or too long (error) |
+
+How tables are classified: referenced by another table's foreign key → dimension; has foreign keys and nothing
+references it → fact; otherwise the name decides (`fact`, `dim`), else unknown. A key-like column named like
+another table's single-column primary key counts as an undeclared link (S4 warning). A fact whose unique key
+includes a natural column that isn't a dimension key (e.g. `deployment_ref`) is item grain: the item is the
+lowest-level dimension (S1 note; S8 doesn't apply). A key on only the generated surrogate (SERIAL, IDENTITY,
+`nextval`) doesn't enforce the grain (S1 error).
 
 **`draft_metric` checks:** type vs numerator/denominator (same rule as the metadata cache); identifiers only in a
 safe form (the same `;`/comment guard as the builder, later the JSqlParser allow-list); a warning when the
@@ -155,6 +163,13 @@ per-row ratio (average of averages).
 | `choose-metrics` | `struggle` | Clarify the goal (count vs rate, outcome vs behavior), search the catalog, propose metrics with their prerequisites, flag missing threads |
 | `design-star-schema` | `description` of the data the team has | Propose fact and dimension tables at the right grain, run `review_star_schema`, iterate |
 | `review-schema` | `ddl` | Run `review_star_schema`, explain each finding, propose fixes and focus levels |
+
+Each prompt returns one user message, built from an owner-curated Markdown template in
+`src/main/resources/advisor/prompts/` (like the guides). The template's `{{argument}}` placeholders are filled in one
+pass, so text a user passes in is never treated as a placeholder. Arguments are required and limited to 4,000
+characters (`ddl`: 64 KB, the same as the tool). The pasted text is wrapped in tags (`<ddl>…</ddl>`) and the
+template tells the assistant to treat it as data, not instructions. The later metadata setup assistant
+(ROADMAP #11) builds on `design-star-schema` and `review-schema`.
 
 ### 4.4 Safety rules (phase 1)
 
@@ -190,7 +205,7 @@ per-row ratio (average of averages).
 3. **JSqlParser now** for `review_star_schema` (reused by the admin screens).
 4. **First catalog entries:** Claude drafts, the owner reviews and decides what Prism stands behind.
 
-## 7. What's built (phase 1 skeleton)
+## 7. What's built (phase 1)
 
 | Piece | Where |
 |---|---|
@@ -202,7 +217,9 @@ per-row ratio (average of averages).
 | Catalog (15 entries; owner review pending). Delivery/quality: change failure rate, deployment frequency, branches merged within a day, open branches, mutation score. Predictability/flow (from the owner's *Agile Metrics* articles): WIP per assignee, feature WIP per team, scope done by mid-sprint, last-day completion, scope churn (with variants), points added mid-sprint, net scope change, commitment strength, Say/Do, velocity | `resources/advisor/catalog/` |
 | Tool `draft_metric` | `AdvisorTools` → `MetricDraftService` → `MetricDraft` |
 | Tool `search_metric_catalog` | `AdvisorTools` → `MetricCatalog.search` |
-| Unit tests (25), incl. "every catalog entry is a valid Prism metric with no warnings" | `MetricDraftServiceTests`, `AdvisorGuidesTests`, `MetricCatalogTests` |
+| Tool `review_star_schema` (JSqlParser 5.3; rules S0–S8; focus-level suggestions) | `AdvisorTools` → `StarSchemaReviewService` → `SchemaReview` |
+| Prompts `choose-metrics`, `design-star-schema`, `review-schema` (§4.3) | `AdvisorPrompts` → `AdvisorPromptTemplates`, `resources/advisor/prompts/*.md` |
+| Unit tests (49), incl. "every catalog entry is a valid Prism metric with no warnings", "the demo schema passes review" and "prompts name only real tools, resources and prompts" | `MetricDraftServiceTests`, `AdvisorGuidesTests`, `MetricCatalogTests`, `StarSchemaReviewServiceTests`, `AdvisorPromptTemplatesTests`, `AdvisorPromptsTests` |
 
 **Try it** (on the owner's Mac):
 
@@ -217,6 +234,25 @@ In the Inspector: **Resources** → `prism://guide/metric-types` shows the guide
 name `Change Failure Rate`, type `percentage`, numerator `smf.failed_deployments`, denominator `smf.deployments`
 returns `valid: true`, an INSERT and the SQL preview. Try type `count` or a numerator `smf.pass_rate` to see an
 error and a warning.
+
+**`review_star_schema`:** paste the `Team_Dim`, `Sprint_Dim` and `Sprint_Metrics_Fact` CREATE TABLE statements from
+`SQL/001-create_star_schema.sql` into `ddl` (the file also creates Prism's own `Focus_Areas`/`Focus_Levels`, which
+aren't a star schema and would be reviewed as one). The demo fact should come back with grain `one row per sprint_pk × team_pk` and no errors; the Time suggestion is
+`sprint_year → year_quarter → year_month → sprint_name` with `sprint_quarter` and `sprint_month` standalone.
+Delete the `unique_sprint_team` constraint and run it again to see the S1 error.
+
+**Prompts:** in the Inspector, **Prompts** → `choose-metrics` with struggle `too many failed deployments` returns one
+user message with the struggle filled in; leaving it empty returns an error. In Claude Code or Claude desktop the
+prompts appear as slash commands or in the prompt picker; picking one runs the workflow with the tools.
+
+Checked in the Claude session for the prompts (2026-10-24): compiled with `-Xlint:all -Werror` against stand-ins for
+Spring AI's annotations and the MCP SDK; the 10 new tests pass. **Not yet checked:** the real `@McpPrompt` /
+`@McpArg` scanning and the Inspector run on the owner's Mac.
+
+Checked in the Claude session for `review_star_schema` (2026-10-24, still no Maven access there): JSqlParser 5.3 built
+from source and used for the real parse; compiled with `-Xlint:all -Werror`; all 39 MCP tests pass. Verified on the
+owner's Mac the same day: Maven build with `jsqlparser` 5.3, and the tool in the Inspector (the S1 error without
+`unique_sprint_team`, the expected warnings, notes and focus-level suggestions).
 
 Skeleton verified on the owner's Mac (2026-10-22): resource and `draft_metric` work in the Inspector.
 

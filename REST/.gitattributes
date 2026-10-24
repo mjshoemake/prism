@@ -1,2 +1,5 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+# Windows scripts need CRLF, shell scripts need LF, whatever the checkout platform
+*.bat text eol=crlf
+*.sh text eol=lf

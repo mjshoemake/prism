@@ -24,10 +24,26 @@ public class AdvisorTools {
 
     private final MetricDraftService metricDraft;
     private final MetricCatalog catalog;
+    private final StarSchemaReviewService schemaReview;
 
-    public AdvisorTools(MetricDraftService metricDraft, MetricCatalog catalog) {
+    public AdvisorTools(MetricDraftService metricDraft, MetricCatalog catalog, StarSchemaReviewService schemaReview) {
         this.metricDraft = metricDraft;
         this.catalog = catalog;
+        this.schemaReview = schemaReview;
+    }
+
+    @McpTool(name = "review_star_schema", description = """
+            Review the CREATE TABLE (and ALTER TABLE) statements of a fact/dimension schema against Prism's \
+            STAR-schema rules. Returns which tables look like facts or dimensions, each fact's grain, findings \
+            (errors first; rules S1 grain, S2 stored ratios, S3 measures, S4 keys, S5 focus levels, S6 empty labels, \
+            S7 time, S8 per-item grain; S0 could not read) with a suggestion for each, and suggested focus areas with \
+            their levels in drill order. Paste DDL only, never data. The DDL is only parsed: it is never run, \
+            stored or logged. Read prism://guide/star-schema to explain the findings.""")
+    public SchemaReview reviewStarSchema(
+            @McpToolParam(description = "CREATE TABLE / ALTER TABLE statements, at most 64 KB. Other statements "
+                    + "(indexes, comments, grants) are skipped.", required = true) String ddl) {
+        log.debug("Started");
+        return PerformanceLog.time("AdvisorTools.reviewStarSchema", () -> schemaReview.review(ddl));
     }
 
     @McpTool(name = "search_metric_catalog", description = """

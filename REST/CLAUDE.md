@@ -2,17 +2,18 @@
 
 Quick orientation for anyone (human or Claude) working in `REST/`. **What to do next: `docs/ROADMAP.md`** (start each session there). Product context: `docs/OVERVIEW.md` (what Prism is, data model today vs target, security model, roadmap). MCP server design (Advisor / Analyst): `docs/MCP.md`. UI how-to: `frontend/docs/DEVELOPER_GUIDE.md`. Read this before opening source files; most questions about structure, endpoints, and conventions are answered here.
 
-_Last updated: 2026-10-22, after the MCP Advisor skeleton (branch feature-MCP-Server; built on the parity-check work)._
+_Last updated: 2026-10-24, after the Advisor prompts (branch feature-MCP-Server-P2)._
 
 ## Stack
 
 - **Spring Boot 3.5.5**, Java **21**, Maven (wrapper 3.9.11). Artifact: `com.prism:prism-api:1.0.0` → `target/prism-api-1.0.0.jar`.
 - **Pure Java** — Groovy and gmavenplus were removed in Oct 2026. No Lombok (only add it if a later change clearly benefits).
 - Data access is **raw SQL via `JdbcTemplate`** returning `List<Map<String,Object>>` / `Map<String,Object>`. No JPA entities exist, even though `spring-boot-starter-data-jpa` is on the classpath (`ddl-auto=none`).
+- **JSqlParser 5.3** (`com.github.jsqlparser:jsqlparser`) parses DDL for `review_star_schema`; planned for the metric admin screens' expression allow-list too.
 - **Spring AI 1.1.x** (`spring-ai-bom`, Spring Boot 3 line) for the MCP server: `spring-ai-starter-mcp-server-webmvc`, annotations in `org.springaicommunity.mcp.annotation` (they move to `org.springframework.ai.mcp.annotation` in Spring AI 2.x).
 - PostgreSQL (`jdbc:postgresql://localhost:5432/playpen`, schema `prism`). BCrypt via `spring-security-crypto` (no Spring Security filter chain — endpoints are unauthenticated).
 - **New database:** `bash SQL/setup.sh` (creates `playpen` and runs every script in order; fresh databases only). First user: `POST /api/users` (see the root README). Password: set `PRISM_DB_PASSWORD` or `PGPASSWORD` before `./run.sh`.
-- Build: `./build.sh` / `build.bat` from `REST/` (runs `npm run build` in `frontend/`, then `mvn clean package`). Run: `./run.sh` (`java -jar target/prism-api-1.0.0.jar`; extra arguments go to Spring Boot, e.g. `./run.sh --prism.mcp.enabled=true`). `test.bat` references a stale jar name (`api-0.0.1-SNAPSHOT.jar`).
+- Build: `./build.sh` / `build.bat` from `REST/` (runs `npm run build` in `frontend/`, then `mvn clean package`). Run: `./run.sh` (`java -jar target/prism-api-1.0.0.jar`; extra arguments go to Spring Boot, e.g. `./run.sh --prism.mcp.enabled=true`; `./runMCP.sh` does exactly that). `run.sh`/`run.bat` read the database password from the git-ignored `REST/.env.local` (`PGPASSWORD=…`) if present. Windows: `build.bat`, `run.bat`, `runMCP.bat`, `test.bat` (`mvn test`); `REST/.gitattributes` keeps `.bat` files CRLF and `.sh` files LF on every platform (bash scripts such as `SQL/setup.sh` and `tools/parity/run.sh` run from Git Bash).
 
 ## Source map
 
@@ -34,8 +35,12 @@ src/main/java/com/prism/
 │   ├── mcp/                         MCP server: Prism Advisor (docs/MCP.md); off unless prism.mcp.enabled=true
 │   │   ├── AdvisorResources.java    @McpResource: prism://guide/{metric-types,star-schema,drill-down,improvement-paths},
 │   │   │                            prism://catalog/metrics (index), prism://catalog/metrics/{id} (one entry)
-│   │   ├── AdvisorTools.java        @McpTool draft_metric → MetricDraftService; search_metric_catalog → MetricCatalog
-│   │   │                            (timed; never touch a database)
+│   │   ├── AdvisorTools.java        @McpTool draft_metric → MetricDraftService; search_metric_catalog → MetricCatalog;
+│   │   │                            review_star_schema → StarSchemaReviewService (timed; never touch a database)
+│   │   ├── AdvisorPrompts.java      @McpPrompt choose-metrics(struggle), design-star-schema(description),
+│   │   │                            review-schema(ddl): one user message each, from AdvisorPromptTemplates
+│   │   ├── AdvisorPromptTemplates.java  prompt list + loader (classpath advisor/prompts/<id>.md, only listed IDs);
+│   │   │                            fills {{argument}} placeholders in one pass; required, ≤ 4,000 chars (ddl ≤ 64 KB)
 │   │   ├── AdvisorGuides.java       guide list + loader (classpath advisor/guides/<id>.md, only listed IDs)
 │   │   ├── MetricCatalog.java       catalog loader (classpath*:advisor/catalog/*.md, YAML header via SnakeYAML),
 │   │   │                            index, deterministic word search (problems/name 3, tags/summary 2, body 1)
@@ -44,6 +49,11 @@ src/main/java/com/prism/
 │   │   │                            (stored ratios, average of ratios), re-runnable Metrics INSERT, SQL preview via
 │   │   │                            the real MetricQueryBuilder
 │   │   ├── MetricDraft.java         record {valid, errors, warnings, calculation, insertSql, previewSql}
+│   │   ├── StarSchemaReviewService.java  review_star_schema: own statement splitter (quotes, $$, comments), JSqlParser
+│   │   │                            per statement (CREATE/ALTER TABLE; others skipped), fact/dimension classification
+│   │   │                            (FKs, implied FKs, name hints), rules S0–S8, focus-level suggestions. DDL never
+│   │   │                            run, stored or logged (only sizes and counts)
+│   │   ├── SchemaReview.java        record {summary, tables, findings, focusAreas, skipped} + nested records
 │   │   └── McpConfig.java           local-only filter on /mcp (loopback only, 403 + audit otherwise) — until auth
 │   ├── metrics/
 │   │   ├── SprintMetricsController.java   /api/metrics (list, data, focus areas/levels)
@@ -83,6 +93,7 @@ src/main/resources/
 ├── application.properties           incl. per-category log levels (logging.level.<Category>); MCP server settings
 ├── advisor/guides/*.md              Advisor guides (owner-curated content, served as MCP resources)
 ├── advisor/catalog/*.md             metric catalog: Markdown + YAML header (id = file name; owner-curated)
+├── advisor/prompts/*.md             Advisor prompt templates with {{argument}} placeholders (owner-curated)
 ├── logback-spring.xml               appenders: console; logs/audit.log + logs/perf.log (daily roll)
 └── static/   BUILD OUTPUT of frontend/ (`npm run build`) — do not edit; git-ignored
 src/test/java/com/prism/api/
@@ -94,6 +105,10 @@ src/test/java/com/prism/api/
 ├── mcp/MetricDraftServiceTests.java       plain JUnit (draft_metric rules, warnings, INSERT quoting, preview)
 ├── mcp/AdvisorGuidesTests.java           plain JUnit (guides load; unknown IDs refused)
 ├── mcp/MetricCatalogTests.java           plain JUnit (every entry loads, links exist, is a valid Prism metric; search)
+├── mcp/StarSchemaReviewServiceTests.java plain JUnit (demo schema passes; each rule S0–S8 triggered; splitter, names)
+├── mcp/AdvisorPromptTemplatesTests.java  plain JUnit (placeholders match arguments; only real tools/resources/prompts
+│                                          named; limits; argument text never re-substituted)
+├── mcp/AdvisorPromptsTests.java          plain JUnit (one user message per prompt; missing argument refused)
 └── common/utils/SecurityUtilsTests.java   plain JUnit, no Spring context
 src/test/java/com/prism/common/utils/LogUtilsTests.java   plain JUnit (records, masking, cycles, duration)
 ```
@@ -167,8 +182,9 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 6. CORS allows `"null"` and `"file://"` origins with credentials (for opening static pages from disk) and only `http://localhost:8080` — revisit before deployment. Test/production URLs are TBD; their origins (or a per-environment property) must be added then. All `localhost` addresses in docs mean a local install.
 7. ~~DB credentials committed~~ **fixed Oct 2026**: `spring.datasource.password=${PRISM_DB_PASSWORD:${PGPASSWORD:}}` (environment only; the earlier local dev password is still in git history).
 8. "Works identically" verification against a live DB was deferred.
-9. `test.bat` jar name is stale.
+9. ~~`test.bat` jar name is stale~~ **fixed Oct 2026**: `test.bat` runs `mvn test`; `run.bat` matches `run.sh`; `runMCP.bat` added.
 10. Frontend: session is just the stored login response (no token); temp-password and enterprise rules are UI-enforced only (see #5). (Filters persisting across focus-area changes is intended — it's how a selection is "rotated" onto another dimension.)
+11. **Focus-level sort order** (raised Oct 2026, not yet scheduled): chart bars are ordered by the label text, so sprint labels such as "Sprint 10" sort before "Sprint 2", and the same sprint name in different years merges into one bar unless the label includes the year. Focus levels need a sort column separate from the display label (e.g. a sort expression per level, `sprint_start_date` for sprints). Fits the fact/dimension branch, where focus levels point at dimension columns; `review_star_schema` already warns about it (S5).
 
 ## Working notes for Claude sessions
 

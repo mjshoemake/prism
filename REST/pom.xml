@@ -74,6 +74,13 @@
 			<artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
 		</dependency>
 
+		<!-- SQL parser for the Advisor's review_star_schema tool (parses DDL only, never runs it) -->
+		<dependency>
+			<groupId>com.github.jsqlparser</groupId>
+			<artifactId>jsqlparser</artifactId>
+			<version>5.3</version>
+		</dependency>
+
 		<!-- Password hashing (BCrypt) -->
 		<dependency>
 			<groupId>org.springframework.security</groupId>

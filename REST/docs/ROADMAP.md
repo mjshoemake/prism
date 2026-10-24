@@ -5,7 +5,7 @@
 > and the numbered backlog** live in [CLAUDE.md](../CLAUDE.md). This file says *what to do next, in what order*.
 > Update it whenever an item is finished or a new one is agreed.
 
-_Last updated: 2026-10-22._
+_Last updated: 2026-10-24._
 
 ---
 
@@ -65,8 +65,16 @@ the real JDBC driver (2026-10-21).
 6. **Schema reading** for client data sources (list tables and columns, suggest joins from foreign keys).
 7. **Calculation templates / Custom type** (free-form expression through the same parser).
 8. **Prism Advisor and community library** (MCP; vision in OVERVIEW §8, design in [MCP.md](MCP.md)). Being built
-   on `feature-MCP-Server` ahead of the fact/dimension work (owner, 2026-10-22); skeleton verified 2026-10-22; guides, catalog drafts and `search_metric_catalog` done (owner review: §1).
-   Next: `review_star_schema` (JSqlParser), the three prompts.
+   on `feature-MCP-Server` ahead of the fact/dimension work (owner, 2026-10-22); skeleton verified 2026-10-22; guides, catalog drafts and `search_metric_catalog` done (owner review: §1); `review_star_schema` built 2026-10-24
+   on `feature-MCP-Server-P2` (rules S0–S8, focus-level suggestions; verified in the Inspector); the three prompts
+   (`choose-metrics`, `design-star-schema`, `review-schema`) built 2026-10-24 on the same branch, templates in
+   `src/main/resources/advisor/prompts/` (owner review, like the guides). Later they also feed the metadata setup
+   assistant (#11).
+   **Next (owner):** build, try the prompts in the Inspector (MCP.md §7), then connect Claude Code or Claude desktop
+   (MCP.md §4.5, still _Open_) and run each workflow end to end. That completes phase 1; phase 2 (`submit_insight`)
+   needs a central service, so the fact/dimension branch (#1) is next after merging.
+   - `review_star_schema` lists every `level_N` column and says to keep only the levels in use: organizations
+     differ (e.g. team → manager → director → SVP) and the DDL can't show which levels hold data (owner, 2026-10-24).
    - Advisor: owner-curated metric catalog, guides, `review_star_schema` and `draft_metric` tools, guided prompts;
    - capture (`submit_insight`) and a curation queue; then give-to-get community access and enterprise-private
      knowledge once authentication exists (#4);
@@ -75,7 +83,22 @@ the real JDBC driver (2026-10-21).
 9. **"What drives this?" analysis** (OVERVIEW §8.4): within-team, lagged and conditional relationships between
    metrics; needs working-practice dimensions and an incidents fact.
 10. **Percentile metric type** (OVERVIEW §8.5): `PERCENTILE_CONT` over raw rows; needs per-item grain.
-11. Later: import a pasted full query into a metric; client-API data sources (if revenue justifies);
+11. **Metadata setup assistant** (raised by the owner, 2026-10-24): users won't know Prism's internal data model,
+   so Prism helps them map their STAR schema onto `Data_Sources`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc`,
+   `Focus_Areas` and `Focus_Levels` (drill pointers included), then onto `Metrics`. Placed here only so earlier
+   numbers stay stable. It needs step 1 (the tables), and the in-app part fits with steps 5–6.
+   - **One shared "configuration proposal" service:** input is DDL (`StarSchemaReviewService` / JSqlParser, not
+     regex) or the live catalog of a connected data source (step 6, the better source: it's what is actually deployed).
+     Output is a proposed set of metadata rows, with the questions it couldn't answer (e.g. which `level_N` columns
+     hold data, display labels, drill order).
+   - **Advisor (MCP):** the `design-star-schema` / `review-schema` prompts ask about the design and produce the
+     proposal as a file (re-runnable SQL or JSON), like `draft_metric`'s INSERT. **The Advisor never writes metadata**
+     until MCP authentication exists (MCP.md phase 3: enterprise and role from the token); even then it only
+     submits a *draft* for an admin to approve.
+   - **In-app wizard:** a signed-in metrics admin imports the proposal (or starts from the connected data source),
+     answers the open questions, sees the validation results and a preview, and confirms. The enterprise comes from
+     the app session, so the app is the security gate.
+12. Later: import a pasted full query into a metric; client-API data sources (if revenue justifies);
    PrivateLink connections; per-cloud deployments (OVERVIEW §3.1); dashboards (tabs ≤ 4 charts, sharing,
    dashboard-wide drill-down); roles; enterprise-scoped metadata; super-user enterprise picker; integrations
    (e.g. Jira).
@@ -84,7 +107,6 @@ the real JDBC driver (2026-10-21).
 
 - #6 CORS (`file://`, `null`): revisit before deployment; add test/prod origins when known.
 - #8 "works identically" check vs the old Groovy code on a live DB (deferred by owner).
-- #9 `test.bat` points to a stale jar name.
 - `Enterprises.temp_password_hash` is unused: drop it in a later script.
 - Demo data: % Estimated is always 100%; Estimate Changed is non-zero for only 13 of 78 teams; completed points
   exceed committed in 86% of rows. **Owner decision: no effort on better demo data**; learn from real data.
@@ -129,3 +151,6 @@ the real JDBC driver (2026-10-21).
 
   These stubs and harnesses live only in the session and must be recreated in a new session (cheap). The
   parity harness is kept in the repo: `REST/tools/parity`.
+- **JSqlParser** (for testing `review_star_schema` against the real parser) can't be downloaded either, but GitHub
+  is reachable: build JavaCC 7.0.13 from source with its bootstrap jar, then JSqlParser 5.3 from its tag (the
+  grammar is a JavaCC `.jjt` file), and compile against the resulting jar. About 10 minutes.

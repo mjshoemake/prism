@@ -230,7 +230,7 @@ Key rules of the target design:
   - Admin UI: two reorderable lists per focus area — **display order**, and **drill-down order** with an "excluded"
     box beside it for levels not on the drill path. The drill list writes the pointers; per-level drill targets
     (branching paths) are possible later without a schema change.
- a metric offers every one of those focus areas and levels unless an exclusion row
+- **Exclusions are opt-out.** A metric offers every one of those focus areas and levels unless an exclusion row
   hides a specific area or level for that metric.
 - **Dashboards may mix fact tables that share dimensions.** A dashboard offers only the focus areas that all
   of its charts support, so dashboard-wide drill-down filters mean the same thing on every chart. The common
@@ -424,7 +424,8 @@ The UI's own security rules are covered in the [UI developer guide](../frontend/
 | Server-side sessions, roles, tenant isolation | Planned |
 | Client-owned data schema / client data API contract | Planned |
 | External integrations (e.g. Jira) via Claude | Planned |
-| Prism Advisor (MCP), community library, improvement paths, "what drives this?" analysis | Vision (§8) |
+| Prism Advisor (MCP) phase 1: guides and metric catalog, `search_metric_catalog` / `draft_metric` / `review_star_schema`, three guided prompts | **Built** (local only, off by default; content in owner review — [MCP.md](MCP.md) §7) |
+| Community library, metadata setup assistant, "what drives this?" analysis | Vision (§8; ROADMAP #8, #9, #11) |
 
 ## 8. Prism Advisor and community library (vision — discussed Oct 2026, not yet designed in detail)
 
