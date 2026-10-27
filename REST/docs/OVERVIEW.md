@@ -223,9 +223,16 @@ Key rules of the target design:
 - **Display order and drill-down are separate (decided Oct 2026).** Focus levels are client-defined (they depend on
   the client's dimensions).
   - `sort_order` is only the order levels appear in pickers.
-  - Drill-down is defined by a **pointer from each level to the next level down** (`drill_to_focus_level_pk`, e.g.
-    Year → Year & Quarter → Year & Month → Sprint). A level with no pointer is a standalone slicing option, e.g.
-    "Month (all years)": clicking its bar adds the filter and stays on that level.
+  - Drill-down is defined by a **pointer from each level to the next level down** (`drill_to_focus_level_pk`). A
+    focus area can hold several drill paths. The demo's Time area has two (owner, Oct 2026): **with the year**, Year →
+    Year & Quarter → Year & Month → Year & Sprint, and **without it**, Quarter → Month → Sprint ("Month (all years)"
+    and so on). A level with no pointer doesn't drill: clicking its bar adds the filter and stays on that level.
+  - **Label and key are separate columns (decided Oct 2026).** A level's **label** column is the text a bar shows
+    ("Sprint 9", "Jan"); it needn't be unique. Its optional **key** column is what Prism groups, sorts and filters
+    by, unique per bar ("2026 Sprint 09", `sprint_start_date`, `2026-01`); each key has one label. Without a key, the
+    label is the key. So bars sort correctly (Sprint 2 before Sprint 10), and a drill-down filter on "Sprint 9" means
+    that bar's sprint, not every Sprint 9. Metadata in place (SQL/015); the API will return each bar's key and filter
+    by it.
   - Rules checked on save and when the cache loads: the next level is in the same focus area, and there are no loops.
   - Admin UI: two reorderable lists per focus area — **display order**, and **drill-down order** with an "excluded"
     box beside it for levels not on the drill path. The drill list writes the pointers; per-level drill targets
@@ -417,8 +424,8 @@ The UI's own security rules are covered in the [UI developer guide](../frontend/
 | Focus area / level ordering via `sort_order` | **Working** (SQL/009) |
 | API builds metric SQL from the `Metrics` table by metric type; UI sends IDs only | **Working** (SQL/012) |
 | Y-axis Scale control (0–100 / fit / custom) with barber-pole outliers | Planned (per-metric default scale works today) |
-| Drill-down pointers (`drill_to_focus_level_pk`), standalone levels | Planned |
-| Data sources / fact & dimension model, exclusions, enterprise scoping | Planned (design agreed, tables not yet created) |
+| Drill-down pointers (`drill_to_focus_level_pk`), several paths per area, label vs key columns | Metadata in place (SQL/015); API and UI still drill by `sort_order` and group by the label |
+| Data sources / fact & dimension model, exclusions, enterprise scoping | **In progress:** `Data_Sources`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc` created and seeded with the demo schema (SQL/013), not yet used by the query builder; exclusions and enterprise scoping planned |
 | Dashboards, tabs (≤ 4 charts), sharing | Planned |
 | Dashboard-wide drill-down across charts | Planned (single-chart version works today) |
 | Server-side sessions, roles, tenant isolation | Planned |

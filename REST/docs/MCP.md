@@ -5,9 +5,9 @@
 > **what to build next** is in [ROADMAP.md](ROADMAP.md). This file is the technical design: where the server
 > runs, what it exposes, the safety rules, and the phases.
 >
-> Status: **phase 1 built (Oct 2026, branches `feature-MCP-Server` and `feature-MCP-Server-P2`)**: the `/mcp`
-> endpoint, the guides and metric catalog as resources, the three tools and the three prompts (§7). Owner review
-> of the content is pending. Decisions still open are marked _Open_.
+> Status: **phase 1 complete (Oct 2026, merged from `feature-MCP-Server` and `feature-MCP-Server-P2`)**: the `/mcp`
+> endpoint, the guides and metric catalog as resources, the three tools and the three prompts (§7); content
+> reviewed by the owner. Decisions still open are marked _Open_.
 
 _Last updated: 2026-10-24._
 
@@ -246,8 +246,8 @@ user message with the struggle filled in; leaving it empty returns an error. In 
 prompts appear as slash commands or in the prompt picker; picking one runs the workflow with the tools.
 
 Checked in the Claude session for the prompts (2026-10-24): compiled with `-Xlint:all -Werror` against stand-ins for
-Spring AI's annotations and the MCP SDK; the 10 new tests pass. **Not yet checked:** the real `@McpPrompt` /
-`@McpArg` scanning and the Inspector run on the owner's Mac.
+Spring AI's annotations and the MCP SDK; the 10 new tests pass. Verified on the owner's Mac the same day: Maven
+build and tests, the three prompts in the Inspector, and each workflow end to end in an assistant.
 
 Checked in the Claude session for `review_star_schema` (2026-10-24, still no Maven access there): JSqlParser 5.3 built
 from source and used for the real parse; compiled with `-Xlint:all -Werror`; all 39 MCP tests pass. Verified on the

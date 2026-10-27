@@ -9,3 +9,5 @@
 
 # Local scratch
 Temp/
+REST/freezeParity.sh
+REST/runParity.sh

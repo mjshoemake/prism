@@ -42,4 +42,5 @@ for script in "$here"/[0-9][0-9][0-9]-*.sql; do
   "${PSQL[@]}" -d "$DB" -q -v ON_ERROR_STOP=1 -f "$script" >/dev/null
 done
 echo "database $DB ready: $("${PSQL[@]}" -d "$DB" -Atc 'SELECT count(*) FROM prism."Sprint_Metrics_Fact"') demo fact rows,"\
-     "$("${PSQL[@]}" -d "$DB" -Atc 'SELECT count(*) FROM prism."Metrics"') metrics"
+     "$("${PSQL[@]}" -d "$DB" -Atc 'SELECT count(*) FROM prism."Metrics"') metrics,"\
+     "$("${PSQL[@]}" -d "$DB" -Atc 'SELECT count(*) FROM prism."DB_Scripts_Executed"') scripts recorded"

@@ -11,30 +11,42 @@ _Last updated: 2026-10-24._
 
 ## 1. In review
 
-1. **Advisor content** (drafted by Claude, reviewed by the owner, whose product knowledge it records):
-   - guides in `src/main/resources/advisor/guides/` (metric types, STAR schema, drill-down, improvement paths);
-   - catalog entries in `src/main/resources/advisor/catalog/` (15 metrics; the predictability and flow entries,
-     the coaching principles and the predictability path come from the owner's *Agile Metrics* articles).
-   Article URLs are added to the content once the series is further along (owner, 2026-10-23).
-   Try it: run with `--prism.mcp.enabled=true` and use the MCP Inspector (`docs/MCP.md` §7).
+Nothing at the moment. Article URLs are added to the Advisor content once the owner's *Agile Metrics* series is
+further along (owner, 2026-10-23).
 
-Done: repository cleanup for public viewing, root README, fresh-database setup script (2026-10-23); parity baseline frozen and committed, retired scripts deleted (2026-10-22: 23,557 cases, 118,168 rows,
+Done: Advisor phase 1 (MCP): content (guides, 15-entry catalog, prompt templates) reviewed by the owner, prompts
+verified in the Inspector and each workflow run end to end in an assistant, branches merged (2026-10-24); repository cleanup for public viewing, root README, fresh-database setup script (2026-10-23); parity baseline frozen and committed, retired scripts deleted (2026-10-22: 23,557 cases, 118,168 rows,
 0 differences); obsolete files deleted, migrations 010–012 run, Year / Quarter / Month filtering confirmed through
 the real JDBC driver (2026-10-21).
 
 ## 2. Next build steps (agreed order)
 
-1. **Feature branch: fact/dimension model** (branch created and checked out by the owner, 2026-10-21;
-   prove-or-fail-fast, merge when confident).
-   - New tables: `Data_Sources` (separate database and API connection columns, exactly one filled; database
-     only for now), `Facts`, `Dimensions`, `Facts_Dimensions_Assoc` (association table: join columns).
-     Seed them with the demo schema.
-   - `Focus_Levels` point to a table and column instead of free-text `column_name`.
+1. **Feature branch `feature-metamodel`: fact/dimension model** (created by the owner after the MCP merge,
+   2026-10-24; prove-or-fail-fast, merge when confident). Steps, each passing the parity check before the next:
+   (a) ✅ SQL/013 tables + demo seed; (b) SQL/014 focus levels → dimension columns, drill pointers, sort column
+   (#11); (c) query builder builds FROM/JOIN from the metadata, `DEMO_FROM_CLAUSE` deleted; (d) data-provider seam,
+   drill pointers in the UI.
+   - ✅ New tables (SQL/013, 2026-10-24): `Data_Sources` (separate database and API connection columns, exactly one
+     filled; `db_connection_method` `prism_database` for the demo schema), `Facts`, `Dimensions`,
+     `Facts_Dimensions_Assoc` (join columns; a fact and its dimensions share a data source). Seeded with the demo
+     schema; the joins built from the seed match `DEMO_FROM_CLAUSE` row for row (4,056 rows). Not read by code yet.
+   - ✅ `DB_Scripts_Executed` (SQL/014, owner's idea, 2026-10-24): one row per completed migration script; every
+     script from 014 on ends by recording itself (CLAUDE.md conventions). 013 and 014 run on the owner's database.
+   - ✅ Metadata for focus levels (SQL/015, 2026-10-24): `Focus_Areas.dimension_pk`; each level has a **label**
+     column (`column_name`, the text a bar shows, need not be unique) and an optional **key** column
+     (`key_column_name`: group, sort and filter by it, unique per bar, one label per key; owner, 2026-10-24); drill
+     pointers. Not read by the code yet. **Owner:** run SQL/015, run the parity check (expect 0 differing values;
+     the new level and changed drill path show as missing / unexpected cases), then `--freeze` and commit the baseline.
+   - Switch on keys (after 1c, backlog #11): group/order by the key, return the key with each chart row, and filter
+     by the key. Deliberate result change (sprint order, years no longer merged where the key separates them), so
+     agree the differences and freeze a new baseline. Month-name labels (Jan, Feb) need label columns in the demo
+     dimension, e.g. `month_name`.
    - `Metrics` point to a fact (`Facts`); the hard-coded FROM clause (`MetricQueryBuilder.DEMO_FROM_CLAUSE`) goes
      away. Prism adds only the joins a query needs.
-   - **Drill-down pointer** `Focus_Levels.drill_to_focus_level_pk`. A level without one is standalone:
-     clicking adds the filter and stays. Checks: same focus area, no loops. Seed: Year → Year & Quarter →
-     Year & Month → Sprint, with Quarter and Month standalone. Organization: Level 5 → … → Team.
+   - **Drill-down pointer** `Focus_Levels.drill_to_focus_level_pk` (✅ metadata, SQL/015). A level without one doesn't
+     drill: clicking adds the filter and stays. Checks: same focus area (FK), no loops (trigger). Seed: two Time paths
+     (owner, 2026-10-24), Year → Year & Quarter → Year & Month → Year & Sprint, and Quarter → Month → Sprint;
+     Organization: Level 5 → … → Team. Still to do: the API returns the pointer and the UI drills by it (step d).
    - Server reaches data through one "metric data provider" seam (database now, client API later).
    - **Parity first:** ✅ permanent check built (2026-10-21): `MetricParityTests` through the real service, a
      hand-checked dataset (zero denominators, NULL values and labels, empty groups, apostrophes, ties, rounding,
@@ -70,9 +82,9 @@ the real JDBC driver (2026-10-21).
    (`choose-metrics`, `design-star-schema`, `review-schema`) built 2026-10-24 on the same branch, templates in
    `src/main/resources/advisor/prompts/` (owner review, like the guides). Later they also feed the metadata setup
    assistant (#11).
-   **Next (owner):** build, try the prompts in the Inspector (MCP.md §7), then connect Claude Code or Claude desktop
-   (MCP.md §4.5, still _Open_) and run each workflow end to end. That completes phase 1; phase 2 (`submit_insight`)
-   needs a central service, so the fact/dimension branch (#1) is next after merging.
+   Prompts verified on the owner's Mac (build, tests, Inspector, each workflow end to end), 2026-10-24: **phase 1
+   complete and merged.** Phase 2 (`submit_insight`) needs a central service, so the fact/dimension branch (#1)
+   comes first.
    - `review_star_schema` lists every `level_N` column and says to keep only the levels in use: organizations
      differ (e.g. team → manager → director → SVP) and the DDL can't show which levels hold data (owner, 2026-10-24).
    - Advisor: owner-curated metric catalog, guides, `review_star_schema` and `draft_metric` tools, guided prompts;
