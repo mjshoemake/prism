@@ -11,10 +11,12 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.springframework.stereotype.Service;
 
+import com.prism.api.metrics.FactDefinition;
 import com.prism.api.metrics.FocusLevelDefinition;
 import com.prism.api.metrics.MetricDefinition;
 import com.prism.api.metrics.MetricQueryBuilder;
 import com.prism.api.metrics.MetricType;
+import com.prism.api.metrics.TableDefinition;
 import com.prism.common.logging.LogCategory;
 
 /**
@@ -40,9 +42,19 @@ public class MetricDraftService {
             "average", "mean");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
+    /** Example fact for the SQL preview: the demo schema (fact smf, dimensions sd and td), as seeded by SQL/013. */
+    private static final FactDefinition PREVIEW_FACT = new FactDefinition(0,
+            new TableDefinition("prism", "Sprint_Metrics_Fact", "smf"),
+            List.of(new FactDefinition.Join(1, new TableDefinition("prism", "Sprint_Dim", "sd"), "sprint_pk", "sprint_pk"),
+                    new FactDefinition.Join(2, new TableDefinition("prism", "Team_Dim", "td"), "team_pk", "team_pk")));
+
     /** Example level and filter for the SQL preview (demo schema columns). */
-    private static final FocusLevelDefinition PREVIEW_GROUP = new FocusLevelDefinition(0, 0, "Year & Month", "year_month");
-    private static final FocusLevelDefinition PREVIEW_FILTER = new FocusLevelDefinition(0, 0, "Team", "team_name");
+    private static final FocusLevelDefinition PREVIEW_GROUP = new FocusLevelDefinition(0, 0, 1, "Year & Month", "year_month");
+    private static final FocusLevelDefinition PREVIEW_FILTER = new FocusLevelDefinition(0, 0, 2, "Team", "team_name");
+
+    /** The first {@code alias.} in an expression: the fact the metric belongs to, for the INSERT. */
+    private static final Pattern ALIAS = Pattern.compile("(?<![A-Za-z0-9_.\"])([a-z_][a-z0-9_]*)\\s*\\.");
+    private static final String DEFAULT_FACT_ALIAS = "smf";
 
     public MetricDraft draft(String name, String type, String numerator, String denominator, String rowCondition,
                              String title, String unit, Integer decimals) {
@@ -109,13 +121,15 @@ public class MetricDraftService {
         String previewSql = null;
         if (errors.isEmpty()) {
             var definition = new MetricDefinition(0, name, metricType, numerator, denominator, rowCondition, title,
-                    unit, places, null, null, null, true);
+                    unit, places, null, null, null, true, PREVIEW_FACT);
             try {
                 var query = MetricQueryBuilder.build(definition, PREVIEW_GROUP,
                         List.of(new MetricQueryBuilder.ResolvedFilter(PREVIEW_FILTER, "Team A")));
                 previewSql = query.sql() + "\n-- ? = 'Team A' (filter values are always bound as parameters)";
             } catch (IllegalStateException e) {
                 errors.add(e.getMessage() + " (no ';', comments or empty expressions)");
+            } catch (IllegalArgumentException e) {
+                errors.add(e.getMessage());
             }
         }
 
@@ -188,17 +202,33 @@ public class MetricDraftService {
         return found;
     }
 
-    /** A re-runnable INSERT for "prism"."Metrics": appended at the end of the display order; skipped if the name exists. */
+    /**
+     * A re-runnable INSERT for "prism"."Metrics": appended at the end of the display order; skipped if the name exists.
+     * The metric belongs to the fact whose alias its expressions use (SQL/016); nothing is inserted if there's none.
+     */
     static String insertSql(String name, MetricType type, String numerator, String denominator, String rowCondition,
                             String title, String unit, int places) {
         log.debug("Started");
         return """
+                -- Fact: the one whose alias is '%s' (if several facts share it, set fact_pk yourself).
                 INSERT INTO "prism"."Metrics"
-                    (name, metric_type, numerator_sql, denominator_sql, row_condition_sql, title, unit, decimal_places, sort_order)
-                SELECT %s, %s, %s, %s, %s, %s, %s, %d, COALESCE(MAX(sort_order), 0) + 10
-                FROM "prism"."Metrics"
-                ON CONFLICT (name) DO NOTHING;""".formatted(literal(name), literal(type.dbValue()), literal(numerator),
-                literal(denominator), literal(rowCondition), literal(title), literal(unit), places);
+                    (fact_pk, name, metric_type, numerator_sql, denominator_sql, row_condition_sql, title, unit, decimal_places, sort_order)
+                SELECT f.fact_pk, %s, %s, %s, %s, %s, %s, %s, %d,
+                       (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM "prism"."Metrics")
+                FROM "prism"."Facts" f
+                WHERE f.table_alias = %s
+                ORDER BY f.fact_pk
+                LIMIT 1
+                ON CONFLICT (name) DO NOTHING;""".formatted(factAlias(numerator), literal(name), literal(type.dbValue()),
+                literal(numerator), literal(denominator), literal(rowCondition), literal(title), literal(unit), places,
+                literal(factAlias(numerator)));
+    }
+
+    /** The alias the numerator starts from (e.g. smf in smf.failed_deployments); the demo fact's if it names none. */
+    static String factAlias(String numerator) {
+        log.debug("Started");
+        var matcher = numerator == null ? null : ALIAS.matcher(numerator);
+        return matcher != null && matcher.find() ? matcher.group(1) : DEFAULT_FACT_ALIAS;
     }
 
     /** A SQL string literal ('' doubled), or NULL. */

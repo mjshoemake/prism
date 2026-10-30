@@ -27,10 +27,13 @@ class MetricDraftServiceTests {
         assertTrue(result.insertSql().contains("'Change Failure Rate', 'percentage', 'smf.failed_deployments', 'smf.deployments', NULL, 'Change Failure Rate', '%', 2,"),
                 result.insertSql());
         assertTrue(result.insertSql().contains("ON CONFLICT (name) DO NOTHING"));
+        assertTrue(result.insertSql().contains("SELECT f.fact_pk, ") && result.insertSql().contains("WHERE f.table_alias = 'smf'"),
+                result.insertSql());
         assertTrue(result.previewSql().contains("NULLIF"), result.previewSql());
         assertTrue(result.previewSql().contains("SUM(smf.failed_deployments)"), result.previewSql());
-        assertTrue(result.previewSql().contains("year_month = ") || result.previewSql().contains("GROUP BY year_month"));
-        assertTrue(result.previewSql().contains("team_name = ?"));
+        assertTrue(result.previewSql().contains("GROUP BY sd.year_month"), result.previewSql());
+        assertTrue(result.previewSql().contains("td.team_name = ?"), result.previewSql());
+        assertTrue(result.previewSql().contains("FROM \"prism\".\"Sprint_Metrics_Fact\" smf\n"), result.previewSql());
         assertTrue(result.calculation().startsWith("SUM(numerator) / SUM(denominator)"));
     }
 
@@ -122,6 +125,15 @@ class MetricDraftServiceTests {
                 MetricDraftService.derivedLookingColumns("smf.pass_rate + smf.avg_velocity_3_sprints"));
         assertEquals(List.of(), MetricDraftService.derivedLookingColumns("smf.accurate_estimates + smf.ratings"));
         assertEquals(List.of(), MetricDraftService.derivedLookingColumns(null));
+    }
+
+    @Test
+    void insertUsesTheFactOfTheNumeratorsAlias() {
+        assertEquals("dep", MetricDraftService.factAlias("SUM(1) + dep.failed"));
+        assertEquals("smf", MetricDraftService.factAlias("1"));
+        assertEquals("smf", MetricDraftService.factAlias("\"Odd\".x"));
+        var result = service.draft("Deploys", "sum", "dep.deployments", null, null, null, null, 0);
+        assertTrue(result.insertSql().contains("WHERE f.table_alias = 'dep'"), result.insertSql());
     }
 
     @Test

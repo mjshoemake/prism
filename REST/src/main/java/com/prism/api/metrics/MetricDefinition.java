@@ -10,10 +10,11 @@ import java.math.BigDecimal;
  * @param denominatorSql  denominator (percentage, ratio); null otherwise
  * @param rowConditionSql optional condition applied to every aggregate of the metric; null if none
  * @param scaleMode       null = the type's default
+ * @param fact            the fact table the metric is calculated from, with its linked dimensions (SQL/016)
  */
 public record MetricDefinition(int metricPk, String name, MetricType type, String numeratorSql, String denominatorSql,
                                String rowConditionSql, String title, String unit, int decimalPlaces, String scaleMode,
-                               BigDecimal scaleMin, BigDecimal scaleMax, boolean active) {
+                               BigDecimal scaleMin, BigDecimal scaleMax, boolean active, FactDefinition fact) {
 
     /** The scale the chart uses: the metric's own setting, else the type's default. */
     public String effectiveScaleMode() {

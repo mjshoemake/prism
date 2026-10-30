@@ -385,8 +385,8 @@ sequenceDiagram
     API->>DB: SELECT … FROM Focus_Areas / Focus_Levels ORDER BY sort_order
     UI->>API: POST /api/metrics/data<br/>{metric_pk, focus_level_pk, filters:[{focus_level_pk, operator, value}]}
     API->>Cache: metric + focus levels by ID (unknown → 400)
-    Cache-->>DB: reload Metrics + Focus_Levels when older than 15 min
-    API->>DB: SELECT <level column> AS label, <calculation by metric type> AS value<br/>FROM <demo fact + dimension joins> WHERE <column> = ? … GROUP BY / ORDER BY <level column>
+    Cache-->>DB: reload Metrics, Facts, Dimensions, links + Focus_Levels when older than 15 min
+    API->>DB: SELECT <dim>.<level column> AS label, <calculation by metric type> AS value<br/>FROM <metric's fact> JOIN <only the dimensions needed> WHERE <dim>.<column> = ? … GROUP BY / ORDER BY <dim>.<level column>
     API-->>UI: rows [{ "label": "2024-10", "value": 87.5 }, …]
 ```
 
@@ -395,8 +395,15 @@ admin-maintained) and binds filter values as query parameters, so the request ca
 Proven identical to the previous behaviour on the demo data: 24,160 metric × level × filter combinations,
 120,580 result rows, 0 differences.
 
-**Still to come:** the FROM/JOIN is hard-coded to the demo schema until data sources and the fact/dimension
-model exist (§4.3); metric expressions are checked only for `;` and comments until the allow-list parser exists.
+**Since step 1c (SQL/016, Oct 2026)** the FROM/JOIN comes from the metadata too: the metric's fact table
+(`Metrics.fact_pk`), plus a JOIN for each dimension the query needs: the grouping level's, the filters', and any
+dimension whose alias the metric's expressions use. Joins are INNER, so every fact row needs its dimension row (a
+foreign key; `review_star_schema` rule S4). Proven identical to the hard-coded demo clause before it was deleted:
+21,050 cases and 191,423 rows on the demo data, 5,320 cases on the hand-checked dataset, 0 differences.
+
+**Still to come:** queries still run on the Prism database's own connection (the data source's read-only
+connection comes with the data-provider seam); metric expressions are checked only for `;` and comments until the
+allow-list parser exists.
 
 ## 6. Security model
 
@@ -406,7 +413,7 @@ model exist (§4.3); metric expressions are checked only for `;` and comments un
 | API access | **Not authenticated.** Any caller can use every endpoint; the UI just hides pages when signed out. | Every request authenticated; enterprise and roles derived from the session. |
 | Authorization | None. | Roles (e.g. viewer, dashboard author, metrics admin, enterprise admin). |
 | Tenant isolation | User administration is scoped to the signed-in user's enterprise **in the UI only** (the API trusts the enterprise sent by the browser). | All metadata and data queries scoped to the user's enterprise by the server. Super-users can switch enterprise with a picker; lists never mix enterprises. |
-| Metric queries | Client sends only IDs and values; the server builds the SQL from cached `Metrics` / `Focus_Levels` metadata and binds filter values (SQL/012). FROM clause hard-coded to the demo schema; metric expressions only guarded against `;` and comments. | Client sends only IDs and values (metric, focus level, filters with an `operator`, initially "equals" only). The server builds all SQL from cached metadata (refreshed every 15 minutes; unknown IDs rejected), binds values as parameters, and runs it on the data source's read-only login with a time limit (§4.3). Metric calculations are parsed and checked against an allow-list. |
+| Metric queries | Client sends only IDs and values; the server builds all the SQL, FROM/JOIN included, from cached metadata (`Metrics`, `Facts`, `Dimensions`, `Focus_Levels`) and binds filter values (SQL/012, SQL/016). Runs on the Prism database's connection; metric expressions only guarded against `;` and comments. | Client sends only IDs and values (metric, focus level, filters with an `operator`, initially "equals" only). The server builds all SQL from cached metadata (refreshed every 15 minutes; unknown IDs rejected), binds values as parameters, and runs it on the data source's read-only login with a time limit (§4.3). Metric calculations are parsed and checked against an allow-list. |
 | Client data sources | Demo data in the Prism database. | No client STAR data in the Prism database; read-only, TLS, allow-listed or private-link connections; credentials in a secrets store (§4.3). |
 | Secrets | `Enterprises.auth_token` stored as plain text; DB credentials in `application.properties`. | In the deployment's secrets store (per cloud provider, §3.1); never returned by the API. |
 | Auditing | Logins, user changes and password changes written to `logs/audit.log`. | Same, plus the acting user once authentication exists. |

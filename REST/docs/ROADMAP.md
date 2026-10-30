@@ -23,9 +23,9 @@ the real JDBC driver (2026-10-21).
 
 1. **Feature branch `feature-metamodel`: fact/dimension model** (created by the owner after the MCP merge,
    2026-10-24; prove-or-fail-fast, merge when confident). Steps, each passing the parity check before the next:
-   (a) ✅ SQL/013 tables + demo seed; (b) SQL/014 focus levels → dimension columns, drill pointers, sort column
-   (#11); (c) query builder builds FROM/JOIN from the metadata, `DEMO_FROM_CLAUSE` deleted; (d) data-provider seam,
-   drill pointers in the UI.
+   (a) ✅ SQL/013 tables + demo seed; (b) ✅ SQL/015 focus levels → dimensions, label/key columns, drill pointers
+   (#11); (c) ✅ (in review) SQL/016 + query builder builds FROM/JOIN from the metadata, `DEMO_FROM_CLAUSE` deleted;
+   (d) data-provider seam, drill pointers in the API and UI; then switch on keys.
    - ✅ New tables (SQL/013, 2026-10-24): `Data_Sources` (separate database and API connection columns, exactly one
      filled; `db_connection_method` `prism_database` for the demo schema), `Facts`, `Dimensions`,
      `Facts_Dimensions_Assoc` (join columns; a fact and its dimensions share a data source). Seeded with the demo
@@ -41,8 +41,17 @@ the real JDBC driver (2026-10-21).
      by the key. Deliberate result change (sprint order, years no longer merged where the key separates them), so
      agree the differences and freeze a new baseline. Month-name labels (Jan, Feb) need label columns in the demo
      dimension, e.g. `month_name`.
-   - `Metrics` point to a fact (`Facts`); the hard-coded FROM clause (`MetricQueryBuilder.DEMO_FROM_CLAUSE`) goes
-     away. Prism adds only the joins a query needs.
+   - ✅ `Metrics` point to a fact (SQL/016 `Metrics.fact_pk`, 2026-10-27); `DEMO_FROM_CLAUSE` deleted. The cache
+     loads facts, dimensions and links; the builder writes FROM the metric's fact and JOINs only the dimensions a
+     query needs (group-by level, filters, dimension aliases in the metric's expressions), with alias-qualified
+     columns. `draft_metric`: preview from an example demo fact; its INSERT fills `fact_pk` from the numerator's
+     alias. Checked in the Claude session against local copies of the demo and hand-checked data, old builder vs
+     new: 21,050 + 5,320 cases, 0 differences. **Owner:** run SQL/016, build, `bash tools/parity/run.sh` (must be
+     0 differing, 0 missing, 0 unexpected against the frozen baseline: the cases don't change).
+     First run on the owner's database (2026-10-30): "Unknown focus level: 7", because its second area is named
+     "Team Hierarchy" and 015 matched areas by name, so it got no `dimension_pk` and no drill pointers. **SQL/017**
+     repairs that by the columns instead of the name (checked on a copy with the renamed area: 13 levels load,
+     old vs new 21,050 cases identical). **Owner:** run 017, then the parity check again.
    - **Drill-down pointer** `Focus_Levels.drill_to_focus_level_pk` (✅ metadata, SQL/015). A level without one doesn't
      drill: clicking adds the filter and stays. Checks: same focus area (FK), no loops (trigger). Seed: two Time paths
      (owner, 2026-10-24), Year → Year & Quarter → Year & Month → Year & Sprint, and Quarter → Month → Sprint;

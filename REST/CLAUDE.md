@@ -2,7 +2,7 @@
 
 Quick orientation for anyone (human or Claude) working in `REST/`. **What to do next: `docs/ROADMAP.md`** (start each session there). Product context: `docs/OVERVIEW.md` (what Prism is, data model today vs target, security model, roadmap). MCP server design (Advisor / Analyst): `docs/MCP.md`. UI how-to: `frontend/docs/DEVELOPER_GUIDE.md`. Read this before opening source files; most questions about structure, endpoints, and conventions are answered here.
 
-_Last updated: 2026-10-24, after SQL/015 focus-level keys and drill pointers (branch feature-metamodel)._
+_Last updated: 2026-10-27, after step 1c: FROM/JOIN from the metadata, SQL/016 (branch feature-metamodel)._
 
 ## Stack
 
@@ -58,13 +58,20 @@ src/main/java/com/prism/
 │   ├── metrics/
 │   │   ├── SprintMetricsController.java   /api/metrics (list, data, focus areas/levels)
 │   │   ├── SprintMetricsService.java      chart data from IDs: resolves metadata, builds + runs the query
-│   │   ├── MetricsMetadataCache.java      in-memory Metrics + Focus_Levels; whole reload every
-│   │   │                                  prism.metadata.cache-ttl (15m); unknown ID → one reload (≤ every 10 s)
-│   │   ├── MetricQueryBuilder.java        SQL from metadata by metric type; filter values bound (Types.OTHER)
+│   │   ├── MetricsMetadataCache.java      in-memory Metrics (with their Facts) + Focus_Levels (with their area's
+│   │   │                                  dimension); whole reload every prism.metadata.cache-ttl (15m); unknown
+│   │   │                                  ID → one reload (≤ every 10 s); unusable rows skipped with a warning
+│   │   ├── MetricQueryBuilder.java        SQL from metadata: calculation by metric type, FROM the metric's fact +
+│   │   │                                  JOIN only the dimensions needed (group-by level, filters, dimension
+│   │   │                                  aliases in the metric's expressions), columns alias-qualified
+│   │   │                                  (sd.year_month); filter values bound (Types.OTHER)
+│   │   ├── FactDefinition.java            cached Facts row + its links (Join: dimension, fact col = dim col);
+│   │   │                                  refuses two tables of one fact sharing an alias
+│   │   ├── TableDefinition.java           schema, table, alias; sqlReference() = "schema"."table" alias
 │   │   ├── MetricType.java                percentage | ratio | average | sum (+ default scale)
-│   │   ├── MetricDefinition.java          cached Metrics row (holds SQL — never sent to the browser)
+│   │   ├── MetricDefinition.java          cached Metrics row + its FactDefinition (holds SQL — never sent to the browser)
 │   │   ├── MetricInfo.java                API view of a metric (display fields only)
-│   │   ├── FocusLevelDefinition.java      cached Focus_Levels row
+│   │   ├── FocusLevelDefinition.java      cached Focus_Levels row + dimension_pk of its focus area
 │   │   ├── ChartDataRequest.java          {metric_pk, focus_level_pk, filters:[{focus_level_pk, operator, value}]}
 │   │   └── MetricQuery.java               {sql, parameters}
 │   └── settings/
@@ -99,7 +106,9 @@ src/main/resources/
 src/test/java/com/prism/api/
 ├── ApiApplicationTests.java         @SpringBootTest contextLoads
 ├── admin/TemporaryPasswordsTests.java     plain JUnit (format, alphabet, randomness)
-├── metrics/MetricQueryBuilderTests.java   plain JUnit (SQL per type, row condition, bound filters, guards)
+├── metrics/MetricQueryBuilderTests.java   plain JUnit (SQL per type, row condition, bound filters, guards, FROM/JOIN
+│                                          from metadata: only needed joins, aliases in expressions, unlinked level
+│                                          refused, name checks, alias clash)
 ├── metrics/MetricParityTests.java         live-DB parity check, skipped unless -Dprism.parity=true (tools/parity/run.sh);
 │                                          + ParityCase (case keys), ParityResults (text format, comparison)
 ├── mcp/MetricDraftServiceTests.java       plain JUnit (draft_metric rules, warnings, INSERT quoting, preview)
@@ -156,8 +165,8 @@ Vite + React 19 + TypeScript SPA; Bootstrap 5 + purple/black theme; Chart.js via
 - **Explicit keys vs sequences:** inserting a row with an explicit key into a SERIAL/IDENTITY column does not advance its sequence (007 did this for Enterprises, 002/003 for Sprint_Dim/Team_Dim, Focus_Areas was seeded by hand). SQL/010 moves those sequences past the current max and ties `Focus_Areas_focus_area_pk_seq` to its column. Seed data should omit keys, or a script must `setval` afterwards.
 - **CITEXT gotcha:** the Postgres driver returns `citext` columns (`Users.email`, `Users.username`) as `PGobject`, which Jackson serializes as `{"type":"citext","value":…}`. Always select them as `email::text AS email`.
 - Confirmed types: `Users.user_id` **UUID**, `Users.email` CITEXT, `Enterprises.enterprise_pk` BIGSERIAL, `focus_area_pk` **integer**.
-- DDL lives in `~/Documents/Work/prism/SQL/` (001 star schema + Focus tables, 002–004 demo data, 005 Focus_Areas rebuild, 006 Enterprises, 007 Users, 008 Metrics + Focus_Levels data, 009 sort_order + Focus_Levels PK/FK, 010 System_Settings + key-sequence realignment, 011 blank usernames → NULL, 012 metric types + 5 demo metrics, 013 Data_Sources / Facts / Dimensions / Facts_Dimensions_Assoc + demo seed, 014 `DB_Scripts_Executed`, 015 focus areas → dimensions, focus-level key columns, drill pointers, Year & Sprint level). **The API requires 009, 010 and 012 to have been run** (013 isn't read yet). **Which scripts ran:** `SELECT * FROM "prism"."DB_Scripts_Executed" ORDER BY name;` (`name` = file name, `date_executed` = last completed; NULL for 001–013, which ran before the table existed).
-- **`Data_Sources`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc`** (SQL/013; **not read by the code yet**, roadmap step 1). `Data_Sources`: `data_source_pk` identity, `enterprise_pk` FK, `name` (unique per enterprise), database columns `db_connection_method` (`prism_database` = the demo schema in the Prism database, no host/credentials; `firewall_allow_list` / `private_link` / `outbound_agent` need `db_host`, `db_name`, `db_credentials_ref`; `db_port` optional) **or** API columns `api_url` (https) + `api_credentials_ref` — exactly one connection (CHECK). `*_credentials_ref` names a secret in the secrets store, never the credentials. `Facts` / `Dimensions`: identity PK, `data_source_pk` FK, `name`, `schema_name`, `table_name` (written quoted; no `"`), `table_alias` (lower-case identifier, e.g. `smf` — what metric expressions use); unique per data source: name, table, alias. `Facts_Dimensions_Assoc`: PK (`fact_pk`, `dimension_pk`), `data_source_pk` with composite FKs so a fact and its dimension share a data source, `fact_column` = `dimension_column` (identifiers). Seed: 'Demo data' (enterprise 'Default') → fact `Sprint_Metrics_Fact smf` joined to `Sprint_Dim sd` (`sprint_pk`) and `Team_Dim td` (`team_pk`): exactly `DEMO_FROM_CLAUSE`. TODO step 3: the cache must refuse a fact and a linked dimension sharing an alias (a constraint can't check across tables).
+- DDL lives in `~/Documents/Work/prism/SQL/` (001 star schema + Focus tables, 002–004 demo data, 005 Focus_Areas rebuild, 006 Enterprises, 007 Users, 008 Metrics + Focus_Levels data, 009 sort_order + Focus_Levels PK/FK, 010 System_Settings + key-sequence realignment, 011 blank usernames → NULL, 012 metric types + 5 demo metrics, 013 Data_Sources / Facts / Dimensions / Facts_Dimensions_Assoc + demo seed, 014 `DB_Scripts_Executed`, 015 focus areas → dimensions, focus-level key columns, drill pointers, Year & Sprint level, 016 `Metrics.fact_pk`, 017 repair of 015 for focus areas with another name (links an area to the demo dimension holding all its level columns; drill pointers by dimension)). **The API requires 016 since step 1c** (it reads `Metrics.fact_pk`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc` and `Focus_Areas.dimension_pk`). **The API requires 009, 010 and 012 to have been run** (013 isn't read yet). **Which scripts ran:** `SELECT * FROM "prism"."DB_Scripts_Executed" ORDER BY name;` (`name` = file name, `date_executed` = last completed; NULL for 001–013, which ran before the table existed).
+- **`Data_Sources`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc`** (SQL/013; **`Facts`, `Dimensions` and `Facts_Dimensions_Assoc` are read by the metadata cache since step 1c**; `Data_Sources` not yet — every query runs on the Prism database's connection until the data-provider seam, step 1d). `Metrics.fact_pk` (SQL/016, NOT NULL) says which fact a metric is calculated from; a focus level whose dimension isn't linked to that fact → 400. `Data_Sources`: `data_source_pk` identity, `enterprise_pk` FK, `name` (unique per enterprise), database columns `db_connection_method` (`prism_database` = the demo schema in the Prism database, no host/credentials; `firewall_allow_list` / `private_link` / `outbound_agent` need `db_host`, `db_name`, `db_credentials_ref`; `db_port` optional) **or** API columns `api_url` (https) + `api_credentials_ref` — exactly one connection (CHECK). `*_credentials_ref` names a secret in the secrets store, never the credentials. `Facts` / `Dimensions`: identity PK, `data_source_pk` FK, `name`, `schema_name`, `table_name` (written quoted; no `"`), `table_alias` (lower-case identifier, e.g. `smf` — what metric expressions use); unique per data source: name, table, alias. `Facts_Dimensions_Assoc`: PK (`fact_pk`, `dimension_pk`), `data_source_pk` with composite FKs so a fact and its dimension share a data source, `fact_column` = `dimension_column` (identifiers). Seed: 'Demo data' (enterprise 'Default') → fact `Sprint_Metrics_Fact smf` joined to `Sprint_Dim sd` (`sprint_pk`) and `Team_Dim td` (`team_pk`): exactly `DEMO_FROM_CLAUSE`. TODO step 3: the cache must refuse a fact and a linked dimension sharing an alias (a constraint can't check across tables).
 - **Target data model** (owner, Oct 2026; `docs/OVERVIEW.md` §4.2–4.3): all metadata enterprise-scoped; tables `Data_Sources` (database and API connection columns, exactly one filled) → `Facts` + shared `Dimensions`, linked by the association table `Facts_Dimensions_Assoc` (join columns); metrics belong to a fact; focus areas are defined on dimensions, focus levels are dimension columns; **no Metric Groups** (the fact table plays that role; add later only if needed); opt-out exclusions per metric/focus area/level; dashboards may mix fact tables but offer only focus areas common to all their charts; dashboards → tabs (≤4 charts) → shares; role-based write access to metadata.
 
 ## Conventions (agreed)

@@ -1,34 +1,36 @@
 package com.prism.api.metrics;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
  * Builds a chart query from cached metadata. Nothing the browser sends ends up in the SQL text: the metric's
- * expressions and the focus-level columns come from the metadata tables, and filter values are bound as parameters.
+ * expressions, its fact table, the dimensions and the focus-level columns come from the metadata tables, and filter
+ * values are bound as parameters.
  * <p>
- * Shape of every query (grouping and ordering by the focus-level column, as before SQL/012):
+ * Shape of every query:
  * <pre>
- * SELECT &lt;column&gt; AS label, &lt;calculation&gt; AS value
- * FROM &lt;demo fact table and dimensions&gt;
- * [WHERE &lt;column&gt; = ? AND ...]
- * GROUP BY &lt;column&gt;
- * ORDER BY &lt;column&gt;
+ * SELECT &lt;dim&gt;.&lt;column&gt; AS label, &lt;calculation&gt; AS value
+ * FROM &lt;metric's fact table&gt; &lt;alias&gt;
+ * [JOIN &lt;dimension&gt; &lt;alias&gt; ON &lt;fact&gt;.&lt;column&gt; = &lt;dimension&gt;.&lt;column&gt; ...]
+ * [WHERE &lt;dim&gt;.&lt;column&gt; = ? AND ...]
+ * GROUP BY &lt;dim&gt;.&lt;column&gt;
+ * ORDER BY &lt;dim&gt;.&lt;column&gt;
  * </pre>
- * The FROM clause is still the demo STAR schema; data sources and fact/dimension metadata replace it later
- * (docs/OVERVIEW.md §4.3).
+ * Only the dimensions a query needs are joined (SQL/016): the grouping level's, the filters', and any dimension whose
+ * alias the metric's expressions use. Joins are INNER, so every fact row must have its dimension row (a foreign key;
+ * {@code review_star_schema} rule S4).
  */
 public final class MetricQueryBuilder {
 
-    /** Today's only data source: the demo STAR schema in the Prism database. */
-    static final String DEMO_FROM_CLAUSE = """
-            FROM "prism"."Sprint_Metrics_Fact" smf
-            JOIN "prism"."Sprint_Dim" sd ON smf.sprint_pk = sd.sprint_pk
-            JOIN "prism"."Team_Dim" td   ON smf.team_pk   = td.team_pk""";
-
-    /** Focus-level columns must be plain identifiers (they are written into the SQL). */
+    /** Focus-level and join columns must be plain identifiers (they are written into the SQL). */
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+    /** {@code alias.} in a metric expression: an alias not preceded by part of another name. */
+    private static final Pattern ALIAS_REFERENCE = Pattern.compile("(?<![A-Za-z0-9_.\"])([a-z_][a-z0-9_]*)\\s*\\.");
 
     /**
      * Cheap guard for metric expressions until they are parsed against an allow-list (backlog #1c): no statement
@@ -43,17 +45,24 @@ public final class MetricQueryBuilder {
     public record ResolvedFilter(FocusLevelDefinition level, String value) {
     }
 
+    /**
+     * @throws IllegalArgumentException a focus level whose dimension isn't linked to the metric's fact (a request the
+     *                                  caller should answer with 400)
+     * @throws IllegalStateException    unusable metadata (no fact, a bad column name or expression)
+     */
     public static MetricQuery build(MetricDefinition metric, FocusLevelDefinition groupBy, List<ResolvedFilter> filters) {
-        var groupColumn = column(groupBy);
-        var sql = new StringBuilder()
-                .append("SELECT ").append(groupColumn).append(" AS label, ")
-                .append(calculation(metric)).append(" AS value\n")
-                .append(DEMO_FROM_CLAUSE).append('\n');
+        var fact = metric.fact();
+        if (fact == null) {
+            throw new IllegalStateException("Metric " + metric.metricPk() + " has no fact table.");
+        }
+        var joined = new HashSet<Integer>(dimensionsUsedBy(metric, fact));
+        var groupColumn = column(metric, fact, groupBy, joined);
+        var calculation = calculation(metric);
 
         var parameters = new ArrayList<String>();
         var conditions = new ArrayList<String>();
         for (var filter : filters) {
-            var column = column(filter.level());
+            var column = column(metric, fact, filter.level(), joined);
             if (filter.value() == null) {
                 conditions.add(column + " IS NULL");
             } else {
@@ -61,12 +70,49 @@ public final class MetricQueryBuilder {
                 parameters.add(filter.value());
             }
         }
+
+        var sql = new StringBuilder()
+                .append("SELECT ").append(groupColumn).append(" AS label, ").append(calculation).append(" AS value\n")
+                .append(fromClause(fact, joined)).append('\n');
         if (!conditions.isEmpty()) {
             sql.append("WHERE ").append(String.join(" AND ", conditions)).append('\n');
         }
         sql.append("GROUP BY ").append(groupColumn).append('\n')
            .append("ORDER BY ").append(groupColumn);
         return new MetricQuery(sql.toString(), List.copyOf(parameters));
+    }
+
+    /** {@code FROM fact alias} plus a JOIN for each needed dimension, in the fact's link order. */
+    static String fromClause(FactDefinition fact, Set<Integer> dimensionPks) {
+        var from = new StringBuilder("FROM ").append(fact.table().sqlReference());
+        for (var join : fact.joins()) {
+            if (dimensionPks.contains(join.dimensionPk())) {
+                from.append("\nJOIN ").append(join.dimension().sqlReference())
+                    .append(" ON ").append(fact.table().alias()).append('.').append(join.factColumn())
+                    .append(" = ").append(join.dimension().alias()).append('.').append(join.dimensionColumn());
+            }
+        }
+        return from.toString();
+    }
+
+    /** Linked dimensions whose alias appears in the metric's numerator, denominator or row condition. */
+    static Set<Integer> dimensionsUsedBy(MetricDefinition metric, FactDefinition fact) {
+        var aliases = new HashSet<String>();
+        for (var expression : new String[] {metric.numeratorSql(), metric.denominatorSql(), metric.rowConditionSql()}) {
+            if (expression != null) {
+                var matcher = ALIAS_REFERENCE.matcher(expression);
+                while (matcher.find()) {
+                    aliases.add(matcher.group(1));
+                }
+            }
+        }
+        var used = new HashSet<Integer>();
+        for (var join : fact.joins()) {
+            if (aliases.contains(join.dimension().alias())) {
+                used.add(join.dimensionPk());
+            }
+        }
+        return used;
     }
 
     /** The metric's value expression, built from its type (see {@link MetricType}). */
@@ -107,10 +153,16 @@ public final class MetricQueryBuilder {
         return name != null && IDENTIFIER.matcher(name).matches();
     }
 
-    private static String column(FocusLevelDefinition level) {
+    /** {@code alias.column} for a focus level; records the dimension as joined. */
+    private static String column(MetricDefinition metric, FactDefinition fact, FocusLevelDefinition level,
+                                 Set<Integer> joined) {
         if (!isIdentifier(level.columnName())) {
             throw new IllegalStateException("Focus level " + level.focusLevelPk() + " has an invalid column name.");
         }
-        return level.columnName();
+        var join = fact.join(level.dimensionPk()).orElseThrow(() -> new IllegalArgumentException(
+                "Focus level '" + level.name() + "' can't be used with metric '" + metric.name()
+                        + "': its dimension isn't linked to the metric's fact table."));
+        joined.add(join.dimensionPk());
+        return join.dimension().alias() + "." + level.columnName();
     }
 }

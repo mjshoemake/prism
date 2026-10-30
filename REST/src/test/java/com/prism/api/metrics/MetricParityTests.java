@@ -388,7 +388,7 @@ class MetricParityTests {
                 case SUM -> decimals--;
             }
             return new MetricDefinition(m.metricPk(), m.name(), type, numerator, null, m.rowConditionSql(), m.title(),
-                    m.unit(), decimals, m.scaleMode(), m.scaleMin(), m.scaleMax(), m.active());
+                    m.unit(), decimals, m.scaleMode(), m.scaleMin(), m.scaleMax(), m.active(), m.fact());
         }
 
         private static int number(Map<String, Object> row, String column) {

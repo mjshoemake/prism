@@ -73,7 +73,8 @@ flowchart LR
 | 1 (Advisor, local) | Inside the Prism API, switched on by a property (`prism.mcp.enabled=true`, off by default) | Simplest; reuses the code directly; no hosting |
 | 2+ (community library) | A **central Advisor service**, extracted from `com.prism.api.mcp` | Prism deployments are per cloud and per enterprise (OVERVIEW §3.1), but the community library must be shared by all clients, so it can't live in one deployment |
 
-To keep that extraction cheap, `com.prism.api.mcp` may depend only on `MetricType`, `MetricDefinition`,
+To keep that extraction cheap, `com.prism.api.mcp` may depend only on `MetricType`, `MetricDefinition` (with
+`FactDefinition`, `TableDefinition` and `FocusLevelDefinition`, records it needs for the preview since step 1c),
 `MetricQueryBuilder` and its own classes. Controllers, the users code and JDBC are off limits for the Advisor. When
 it's extracted, those shared classes move to a small `prism-core` Maven module used by both applications.
 
