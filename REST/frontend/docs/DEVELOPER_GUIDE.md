@@ -601,7 +601,8 @@ folders.
 | Focus area | A dimension to slice by (Time, Organization). |
 | Focus level | A level within a focus area (Year, Month…). The chart groups by it; `sort_order` is display order; `drill_to_focus_level_pk` is the level a click drills to. |
 | Filter | `level = value` condition; filters combine with AND and persist when you change focus area. |
-| Drill-down | Bar click → add filter + move to the level's drill target (if it has one). |
+| Drill-down | Bar click → add filter + move to the level's drill target (if it has one). On a dashboard it applies to every chart. |
+| Dashboard | A saved page of 1, 2 or 4 chart areas (SQL/020), a metric per area; `useMetricsExplorer` is shared by all its charts. |
 | Session | The stored login response (`prism_auth` in `localStorage`). |
 
 **Related documents**

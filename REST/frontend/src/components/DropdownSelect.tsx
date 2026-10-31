@@ -2,7 +2,10 @@ import type { Key } from 'react';
 
 interface DropdownSelectProps<T> {
   id: string;
-  label: string;
+  /** Visible label above the dropdown; omit it where the context says enough (then pass ariaLabel). */
+  label?: string;
+  /** Accessible name when there is no visible label. */
+  ariaLabel?: string;
   placeholder: string;
   items: readonly T[];
   selected: T | null;
@@ -19,6 +22,7 @@ interface DropdownSelectProps<T> {
 export function DropdownSelect<T>({
   id,
   label,
+  ariaLabel,
   placeholder,
   items,
   selected,
@@ -31,9 +35,11 @@ export function DropdownSelect<T>({
 
   return (
     <>
-      <label className="form-label" htmlFor={id}>
-        {label}
-      </label>
+      {label && (
+        <label className="form-label" htmlFor={id}>
+          {label}
+        </label>
+      )}
       <div className="dropdown">
         <button
           id={id}
@@ -41,6 +47,7 @@ export function DropdownSelect<T>({
           className="btn btn-outline-secondary form-select-sm w-100 text-start d-flex justify-content-between align-items-center"
           data-bs-toggle="dropdown"
           aria-expanded="false"
+          aria-label={label ? undefined : ariaLabel}
           disabled={disabled}
         >
           <span>{selected ? getLabel(selected) : placeholder}</span>

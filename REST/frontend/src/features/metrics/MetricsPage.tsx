@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { ChartPanel } from './components/ChartPanel';
 import { SelectionsPanel } from './components/SelectionsPanel';
 import { useMetricList } from './useMetricList';
@@ -6,7 +7,9 @@ import { useMetricsExplorer } from './useMetricsExplorer';
 /** Metric picker + drill-down explorer. Everything about a metric comes from the API (Metrics table). */
 export function MetricsPage() {
   const metricList = useMetricList();
-  const explorer = useMetricsExplorer(metricList.selectedMetric);
+  const metrics = useMemo(() => [metricList.selectedMetric], [metricList.selectedMetric]);
+  const explorer = useMetricsExplorer(metrics);
+  const chart = explorer.charts[0];
 
   return (
     <div className="metrics-page">
@@ -29,9 +32,9 @@ export function MetricsPage() {
       <ChartPanel
         metric={metricList.selectedMetric}
         selectedLevel={explorer.selectedLevel}
-        rows={explorer.rows}
+        rows={chart.rows}
         loading={explorer.loading || metricList.loading}
-        error={explorer.chartError}
+        error={chart.error}
         onBarClick={explorer.drillDown}
       />
     </div>

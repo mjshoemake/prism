@@ -71,6 +71,12 @@ src/
 │   │   ├── metricFormat.ts          Value/tick/legend formatting and y-axis bounds from the metric's metadata
 │   │   ├── filters.ts               Filter type, (blank) label, request filters
 │   │   └── components/              SelectionsPanel, ActiveFilters, ChartPanel, MetricBarChart
+│   ├── dashboards/
+│   │   ├── DashboardsPage.tsx       Page (/#/dashboards): sidebar + 1, 2 or 4 chart areas
+│   │   ├── useDashboards.ts         The user's saved dashboards; every change saved at once (undone on failure)
+│   │   ├── layouts.ts               Layouts, visible positions, metric per position
+│   │   └── components/              DashboardSidebar (picker, new/rename/delete, layout, shared selections),
+│   │                                DashboardChartCard (metric picker + chart)
 │   ├── users/
 │   │   ├── UsersPage.tsx
 │   │   ├── useUsers.ts              List + CRUD with toasts

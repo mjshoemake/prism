@@ -11,7 +11,22 @@ _Last updated: 2026-10-24._
 
 ## 1. In review
 
-Nothing at the moment. Article URLs are added to the Advisor content once the owner's *Agile Metrics* series is
+1. **Saved dashboards** (owner, 2026-10-31; built 2026-10-31): a user creates dashboards with a layout of 1 chart
+   (today's page), 2 (one above the other) or 4 (quadrants), and picks the metric for each chart area. Decisions
+   (owner): drill-down is dashboard-wide (shared focus area, level and filters: a click filters and drills every
+   chart); saved per user; switching to fewer charts keeps the hidden areas' metrics; no tabs for now.
+   - SQL/020 `Dashboards` + `Dashboard_Charts`; `/api/dashboards` (owner from `X-User-ID` until #4);
+     `useMetricsExplorer` now serves several charts (the Metrics page passes one); Dashboards page (`/#/dashboards`,
+     nav Dashboard → Dashboards): pick / create / rename / delete (with confirm), layout switch, a metric picker per
+     chart area. A chart whose metric can't use the current level shows the server's message.
+   - Checked in the Claude session: SQL rules on Postgres; the API end to end (create, duplicate name 409, other
+     user's dashboard 404, hidden areas kept, delete); 42 unit tests; whole-frontend typecheck; a browser run
+     (create → 4 charts → pick metrics → one click drills all four → 2 charts → back to 4 restores them → rename →
+     delete); the Metrics page's click-through unchanged. No calculation change (parity unaffected).
+   - **Owner:** run SQL/019 + SQL/020 together (019 was waiting for the next database change; then parity, expect
+     only Year & Sprint label differences, and `--freeze`), build, try `/#/dashboards`.
+
+Article URLs are added to the Advisor content once the owner's *Agile Metrics* series is
 further along (owner, 2026-10-23).
 
 Done: Advisor phase 1 (MCP): content (guides, 15-entry catalog, prompt templates) reviewed by the owner, prompts
@@ -51,8 +66,10 @@ the real JDBC driver (2026-10-21).
      (hand-checked 18 cases, 0 differences); baseline re-frozen; then 50,336 cases, 190,668 rows, 0 / 0 / 0.
    - Year & Sprint label with the year at the end (owner, 2026-10-31: across years, "Sprint 26" alone can't be told
      apart): **SQL/019**, label `year_sprint_label` "Sprint 26 2024"; key unchanged, so a label-only change. The
-     all-years Sprint level keeps "Sprint 26". **Owner:** run 019, parity (expect differences only in Year & Sprint
-     labels; hand-checked 0), then `--freeze`.
+     all-years Sprint level keeps "Sprint 26". **Pending (owner, 2026-10-31): apply 019 with the next database
+     change**, then parity (expect differences only in Year & Sprint labels; hand-checked 0) and `--freeze`. Until
+     then the demo database shows "Sprint 26" on Year & Sprint; the hand-checked fixture (rebuilt from all scripts each
+     run) already uses 019's labels, so `expected.tsv` and `run.sh` stay consistent.
    - ✅ `Metrics` point to a fact (SQL/016 `Metrics.fact_pk`, 2026-10-27); `DEMO_FROM_CLAUSE` deleted. The cache
      loads facts, dimensions and links; the builder writes FROM the metric's fact and JOINs only the dimensions a
      query needs (group-by level, filters, dimension aliases in the metric's expressions), with alias-qualified
@@ -94,8 +111,19 @@ the real JDBC driver (2026-10-21).
    - users with a temporary password are blocked from everything except Change Password;
    - users can't deactivate themselves;
    - fold in **#3** (missing fields → 400 via `@ControllerAdvice`).
-5. **Metric admin screens:**
-   - pick a type and columns;
+5. **Metadata admin screens** (owner, 2026-10-31: configuring Prism for a new database must be possible in the UI,
+   without knowing Prism's internal tables; metrics admins only, enterprise from the session, so after #4):
+   - **Data sources:** add / edit a data source (connection method, host, database, the secret's name; never the
+     credentials themselves), **Test connection**;
+   - **Facts and dimensions:** pick tables from the data source (with #6 schema reading), set aliases, and the
+     fact–dimension links (join columns, suggested from foreign keys);
+   - **Focus areas and levels:** an area per dimension; levels as dimension columns with a **label** and a **key**
+     column (one label per key, checked), display order, and drill paths (several per area, as in the demo's two
+     Time paths), with the same-area / no-loop rules;
+   - **Metrics:** as below;
+   - the metadata setup assistant (#11) produces proposals these screens import and validate.
+   Metric editing:
+   - pick a fact, a type and columns;
    - row condition;
    - parse-based validation (JSqlParser allow-list incl. `GREATEST`/`LEAST`), with "did you mean" column
      suggestions;
@@ -140,8 +168,8 @@ the real JDBC driver (2026-10-21).
      answers the open questions, sees the validation results and a preview, and confirms. The enterprise comes from
      the app session, so the app is the security gate.
 12. Later: import a pasted full query into a metric; client-API data sources (if revenue justifies);
-   PrivateLink connections; per-cloud deployments (OVERVIEW §3.1); dashboards (tabs ≤ 4 charts, sharing,
-   dashboard-wide drill-down); roles; enterprise-scoped metadata; super-user enterprise picker; integrations
+   PrivateLink connections; per-cloud deployments (OVERVIEW §3.1); dashboard tabs and sharing (dashboards
+   themselves: §1); save a dashboard's last focus level and filters; roles; enterprise-scoped metadata; super-user enterprise picker; integrations
    (e.g. Jira).
 
 ## 3. Smaller backlog items (see CLAUDE.md "Open issues")

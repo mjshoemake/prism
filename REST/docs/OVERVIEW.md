@@ -55,7 +55,9 @@ flowchart LR
     filter --> c4["Chart 4 re-queries"]
 ```
 
-**Today:** there is one chart on one page; drill-down works exactly this way for that chart.
+**Today (SQL/020, Oct 2026):** saved dashboards of 1, 2 or 4 charts work this way: each chart area has its own
+metric, and the focus area, level and filters are shared, so a click on any chart filters and drills them all. The
+single-chart Metrics page uses the same drill-down. No tabs yet (owner: one page per dashboard for now).
 
 ## 3. Architecture
 
@@ -440,8 +442,8 @@ The UI's own security rules are covered in the [UI developer guide](../frontend/
 | Drill-down pointers (`drill_to_focus_level_pk`), several paths per area | **Working** (SQL/015, step 1d): the UI drills by the pointer; a level without one only adds the filter |
 | Label vs key columns per focus level | **Working** (SQL/015, SQL/018, step 1e): charts group, sort and filter by the key and show the label (e.g. "Sprint 26" with key 2024-12-23) |
 | Data sources / fact & dimension model, exclusions, enterprise scoping | **In progress:** `Data_Sources`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc` created and seeded with the demo schema (SQL/013), not yet used by the query builder; exclusions and enterprise scoping planned |
-| Dashboards, tabs (≤ 4 charts), sharing | Planned |
-| Dashboard-wide drill-down across charts | Planned (single-chart version works today) |
+| Saved dashboards: 1, 2 (stacked) or 4 (quadrants) charts, a metric per chart, dashboard-wide drill-down | **Working** (SQL/020; owner from the browser until sessions, #4) |
+| Dashboard tabs, sharing dashboards | Planned |
 | Server-side sessions, roles, tenant isolation | Planned |
 | Client-owned data schema / client data API contract | Planned |
 | External integrations (e.g. Jira) via Claude | Planned |

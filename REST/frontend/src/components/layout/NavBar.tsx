@@ -38,6 +38,11 @@ export function NavBar() {
                   Metrics
                 </Link>
               </li>
+              <li>
+                <Link className="dropdown-item" to="/dashboards">
+                  Dashboards
+                </Link>
+              </li>
             </NavDropdown>
             <NavDropdown title="Admin">
               <li>

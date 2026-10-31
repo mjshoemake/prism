@@ -63,6 +63,35 @@ export interface ChartRow {
   value: number | null;
 }
 
+// ---- Dashboards -------------------------------------------------------------
+
+/** Chart areas on a dashboard: 1 = one chart, 2 = two stacked, 4 = quadrants. */
+export type DashboardLayout = 1 | 2 | 4;
+
+/** The metric in one chart area; positions 1–4 in reading order (2-chart layout: 1 top, 2 bottom). */
+export interface DashboardChart {
+  position: number;
+  metric_pk: number;
+}
+
+/**
+ * A saved dashboard (GET /api/dashboards). `charts` may hold positions beyond the layout: they are kept (and come
+ * back when switching to more charts) but aren't shown.
+ */
+export interface Dashboard {
+  dashboard_pk: number;
+  name: string;
+  layout: DashboardLayout;
+  charts: DashboardChart[];
+}
+
+/** Body of POST /api/dashboards and PUT /api/dashboards/{pk}: the whole dashboard. */
+export interface DashboardRequest {
+  name: string;
+  layout: DashboardLayout;
+  charts: DashboardChart[];
+}
+
 // ---- Users ----------------------------------------------------------------
 
 /** Timestamps arrive as ISO-8601 strings (Jackson's Spring Boot default); epoch millis are tolerated. */
