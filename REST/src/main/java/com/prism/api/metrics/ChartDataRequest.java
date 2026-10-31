@@ -18,7 +18,8 @@ public record ChartDataRequest(@JsonProperty("metric_pk") Integer metricPk,
      * "focus level = value".
      *
      * @param operator only "eq" today (null = "eq"); a field so other operators can be added without changing the contract
-     * @param value    the bar label clicked; null matches rows where the column is empty
+     * @param value    the clicked bar's {@code key} (step 1e; the label for a level without a key column); null
+     *                 matches rows where the key is empty
      */
     public record Filter(@JsonProperty("focus_level_pk") Integer focusLevelPk, String operator, String value) {
     }

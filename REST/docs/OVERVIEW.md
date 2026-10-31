@@ -231,8 +231,10 @@ Key rules of the target design:
     ("Sprint 9", "Jan"); it needn't be unique. Its optional **key** column is what Prism groups, sorts and filters
     by, unique per bar ("2026 Sprint 09", `sprint_start_date`, `2026-01`); each key has one label. Without a key, the
     label is the key. So bars sort correctly (Sprint 2 before Sprint 10), and a drill-down filter on "Sprint 9" means
-    that bar's sprint, not every Sprint 9. Metadata in place (SQL/015); the API will return each bar's key and filter
-    by it.
+    that bar's sprint, not every Sprint 9. Working since step 1e (SQL/018): the API returns `{key, label, value}` and
+    filters by key. Demo Time levels (owner, Oct 2026): labels are Year "2024", Year & Quarter "Q4 2024", Year & Month "Dec 2024",
+    Year & Sprint "Sprint 26 2024" (SQL/019: across years a sprint label needs its year), Quarter "Q4", Month "Dec",
+    and the all-years Sprint level "Sprint 26" (each bar combines that sprint number from every year).
   - Rules checked on save and when the cache loads: the next level is in the same focus area, and there are no loops.
   - Admin UI: two reorderable lists per focus area — **display order**, and **drill-down order** with an "excluded"
     box beside it for levels not on the drill path. The drill list writes the pointers; per-level drill targets
@@ -401,8 +403,12 @@ dimension whose alias the metric's expressions use. Joins are INNER, so every fa
 foreign key; `review_star_schema` rule S4). Proven identical to the hard-coded demo clause before it was deleted:
 21,050 cases and 191,423 rows on the demo data, 5,320 cases on the hand-checked dataset, 0 differences.
 
-**Still to come:** queries still run on the Prism database's own connection (the data source's read-only
-connection comes with the data-provider seam); metric expressions are checked only for `;` and comments until the
+**Data providers (step 1d):** the service reaches chart data only through a `MetricDataProvider`, chosen by the
+metric's data source (`Data_Sources` connection method). The request it gets is source-neutral (metric, focus level,
+filters), so a client-run API can implement the same seam later. Today the only provider is `prism_database` (the
+demo schema, on Prism's own connection); a data source with another method is refused with a clear message.
+
+**Still to come:** a provider for client databases with a read-only login and a time limit (roadmap #3); metric expressions are checked only for `;` and comments until the
 allow-list parser exists.
 
 ## 6. Security model
@@ -431,7 +437,8 @@ The UI's own security rules are covered in the [UI developer guide](../frontend/
 | Focus area / level ordering via `sort_order` | **Working** (SQL/009) |
 | API builds metric SQL from the `Metrics` table by metric type; UI sends IDs only | **Working** (SQL/012) |
 | Y-axis Scale control (0–100 / fit / custom) with barber-pole outliers | Planned (per-metric default scale works today) |
-| Drill-down pointers (`drill_to_focus_level_pk`), several paths per area, label vs key columns | Metadata in place (SQL/015); API and UI still drill by `sort_order` and group by the label |
+| Drill-down pointers (`drill_to_focus_level_pk`), several paths per area | **Working** (SQL/015, step 1d): the UI drills by the pointer; a level without one only adds the filter |
+| Label vs key columns per focus level | **Working** (SQL/015, SQL/018, step 1e): charts group, sort and filter by the key and show the label (e.g. "Sprint 26" with key 2024-12-23) |
 | Data sources / fact & dimension model, exclusions, enterprise scoping | **In progress:** `Data_Sources`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc` created and seeded with the demo schema (SQL/013), not yet used by the query builder; exclusions and enterprise scoping planned |
 | Dashboards, tabs (≤ 4 charts), sharing | Planned |
 | Dashboard-wide drill-down across charts | Planned (single-chart version works today) |

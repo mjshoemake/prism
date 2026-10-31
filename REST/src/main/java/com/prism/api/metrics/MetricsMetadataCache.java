@@ -45,14 +45,20 @@ public class MetricsMetadataCache {
             """;
 
     private static final String FOCUS_LEVELS_SQL = """
-            SELECT fl.focus_level_pk, fl.focus_area_pk, fa.dimension_pk, fl.name, fl.column_name
+            SELECT fl.focus_level_pk, fl.focus_area_pk, fa.dimension_pk, fl.name, fl.column_name, fl.key_column_name
             FROM "prism"."Focus_Levels" fl
             JOIN "prism"."Focus_Areas" fa ON fa.focus_area_pk = fl.focus_area_pk
             """;
 
     private static final String FACTS_SQL = """
-            SELECT fact_pk, schema_name, table_name, table_alias
+            SELECT fact_pk, data_source_pk, schema_name, table_name, table_alias
             FROM "prism"."Facts"
+            """;
+
+    /** Only what picks a data provider: no connection details or credentials in the cache. */
+    private static final String DATA_SOURCES_SQL = """
+            SELECT data_source_pk, name, db_connection_method, api_url IS NOT NULL AS is_api
+            FROM "prism"."Data_Sources"
             """;
 
     private static final String DIMENSIONS_SQL = """
@@ -68,7 +74,8 @@ public class MetricsMetadataCache {
 
     /** One consistent copy of the metadata. */
     private record Snapshot(Map<Integer, MetricDefinition> metrics, List<MetricDefinition> metricsInOrder,
-                            Map<Integer, FocusLevelDefinition> focusLevels, Instant loadedAt) {
+                            Map<Integer, FocusLevelDefinition> focusLevels, Map<Integer, DataSourceDefinition> dataSources,
+                            Instant loadedAt) {
     }
 
     private final JdbcTemplate jdbcTemplate;
@@ -105,6 +112,12 @@ public class MetricsMetadataCache {
             found = reloadAfterMiss().focusLevels().get(focusLevelPk);
         }
         return Optional.ofNullable(found);
+    }
+
+    /** A data source by ID (the one a metric's fact lives in); empty if unknown. */
+    public Optional<DataSourceDefinition> dataSource(int dataSourcePk) {
+        log.debug("Started");
+        return Optional.ofNullable(current().dataSources().get(dataSourcePk));
     }
 
     /** Drops the cache so the next request reloads it (e.g. after metadata is edited through Prism). */
@@ -149,6 +162,14 @@ public class MetricsMetadataCache {
 
     private Snapshot load(Instant now) {
         log.debug("Started");
+        sqlLog.debug("SQL: {}", DATA_SOURCES_SQL);
+        var dataSources = new HashMap<Integer, DataSourceDefinition>();
+        for (var row : jdbcTemplate.queryForList(DATA_SOURCES_SQL)) {
+            var pk = intValue(row, "data_source_pk");
+            var method = Boolean.TRUE.equals(row.get("is_api")) ? DataSourceDefinition.API
+                    : (String) row.get("db_connection_method");
+            dataSources.put(pk, new DataSourceDefinition(pk, (String) row.get("name"), method));
+        }
         var facts = loadFacts();
 
         sqlLog.debug("SQL: {}", METRICS_SQL);
@@ -171,16 +192,19 @@ public class MetricsMetadataCache {
                 continue;
             }
             var level = new FocusLevelDefinition(pk, intValue(row, "focus_area_pk"), intValue(row, "dimension_pk"),
-                    (String) row.get("name"), (String) row.get("column_name"));
-            if (MetricQueryBuilder.isIdentifier(level.columnName())) {
-                levels.put(level.focusLevelPk(), level);
-            } else {
+                    (String) row.get("name"), (String) row.get("column_name"),
+                    blankToNull((String) row.get("key_column_name")));
+            if (!MetricQueryBuilder.isIdentifier(level.columnName())) {
                 log.warn("Focus level {} skipped: column_name is not a plain identifier", level.focusLevelPk());
+            } else if (!MetricQueryBuilder.isIdentifier(level.keyColumn())) {
+                log.warn("Focus level {} skipped: key_column_name is not a plain identifier", level.focusLevelPk());
+            } else {
+                levels.put(level.focusLevelPk(), level);
             }
         }
         log.info("Metric metadata loaded: {} metrics, {} facts, {} focus levels", metrics.size(), facts.size(),
                 levels.size());
-        return new Snapshot(Map.copyOf(metrics), List.copyOf(inOrder), Map.copyOf(levels), now);
+        return new Snapshot(Map.copyOf(metrics), List.copyOf(inOrder), Map.copyOf(levels), Map.copyOf(dataSources), now);
     }
 
     /** Facts with their linked dimensions. A fact or link that can't be used is skipped with a warning. */
@@ -220,7 +244,8 @@ public class MetricsMetadataCache {
         for (var row : jdbcTemplate.queryForList(FACTS_SQL)) {
             var pk = intValue(row, "fact_pk");
             try {
-                facts.put(pk, new FactDefinition(pk, table(row), joins.getOrDefault(pk, List.of())));
+                facts.put(pk, new FactDefinition(pk, intValue(row, "data_source_pk"), table(row),
+                        joins.getOrDefault(pk, List.of())));
             } catch (IllegalArgumentException e) {
                 log.warn("Fact {} skipped: {}", pk, e.getMessage());
             }

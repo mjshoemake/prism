@@ -205,7 +205,9 @@ class MetricParityTests {
      * <li>{@value #RANDOM_CASES_PER_METRIC} seeded random combinations of 2–3 filters;</li>
      * <li>a value with an apostrophe.</li>
      * </ul>
-     * Filter values are the labels the metrics return (so the generator doesn't need to know the FROM clause).
+     * Filter values are the keys the metrics return (step 1e: a filter matches a level's key column; for a level
+     * without one the key is its label), so the generator doesn't need to know the FROM clause. Results are still
+     * compared as label|value: a wrong key shows up in the filtered cases.
      */
     static List<ParityCase> generateCases(Database db) {
         var metrics = db.cache.activeMetrics().stream().map(MetricDefinition::name).toList();
@@ -215,8 +217,8 @@ class MetricParityTests {
             var seen = new LinkedHashSet<String>();
             for (var metric : metrics) {
                 for (var row : db.fetch(new ParityCase(metric, level.name(), List.of()))) {
-                    var label = row.get("label");
-                    seen.add(label == null ? null : label.toString());
+                    var key = row.get("key");
+                    seen.add(key == null ? null : key.toString());
                 }
             }
             values.put(level.name(), new ArrayList<>(seen));
@@ -305,7 +307,8 @@ class MetricParityTests {
             this.dataSource = new SingleConnectionDataSource(url, user, password, true);
             this.jdbc = new JdbcTemplate(dataSource);
             this.cache = new MetricsMetadataCache(jdbc, Duration.ofHours(1));
-            this.service = new SprintMetricsService(jdbc, cache);
+            this.service = new SprintMetricsService(jdbc, cache,
+                    new MetricDataProviders(List.of(new PrismDatabaseDataProvider(jdbc))));
         }
 
         /** Focus levels in display order (area sort_order, then level sort_order). Names must be unique. */

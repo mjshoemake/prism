@@ -10,7 +10,7 @@ metric and focus-level definitions read from the database (nothing hand-copied).
 
 | Check | Database | Compared with |
 |---|---|---|
-| **Hand-checked dataset**: 15 edge cases with answers worked out by hand (below) | `prism_fixture`, rebuilt each run by `fixture/fixture.sh` | `fixture/expected.tsv` |
+| **Hand-checked dataset**: 18 edge cases with answers worked out by hand (below) | `prism_fixture`, rebuilt each run by `fixture/fixture.sh` | `fixture/expected.tsv` |
 | **Demo data**: every metric × focus level × filter combination (~23,500 cases, ~118,000 rows) | `playpen` | `baseline/demo-baseline.txt` (frozen) |
 | **Check the check**: a plausible wrong calculation must be reported as different, for every metric | both | the two above |
 
@@ -59,7 +59,9 @@ Generated from the database every run (so new metrics and levels are included au
 - 300 seeded random combinations of 2–3 filters (same seed every run, so the same cases);
 - a value with an apostrophe (`O'Brien`).
 
-Filter values are taken from the labels the metrics return, so the generator doesn't depend on the FROM clause.
+Filter values are taken from the keys the metrics return (step 1e: filters match a level's key column; for a level
+without one the key is its label), so the generator doesn't depend on the FROM clause. Results are still compared
+as `label|value`; a wrong key shows up in the filtered cases.
 Cases are identified by names (`Say/Do Ratio | Year | Team=Team 7`), not IDs. Focus-level names must therefore be
 unique, and renaming a metric or level means freezing again.
 
@@ -82,21 +84,24 @@ names; Team E has no fact rows. Expected answers (`fixture/expected.tsv`), worke
 
 | Case | Calculation | Expected |
 |---|---|---|
-| Say/Do, Level 2, Sprint 25.01 | (9 + 10) / (10 + 40) | Mgr Lee **38.00** (not 57.50, the average of 90 % and 25 %; OVERVIEW §4.1) |
+| Say/Do, Level 2, Sprint = 1 (key; label Sprint 25.01) | (9 + 10) / (10 + 40) | Mgr Lee **38.00** (not 57.50, the average of 90 % and 25 %; OVERVIEW §4.1) |
 | Say/Do by Team | O'Brien (15+5)/(20+10); A (9+0+10)/(10+0+10); B 10/40; D 10/20 | 66.67, 95.00, 25.00, 50.00 |
 | Say/Do by Level 2 | Lee (19+10)/(20+40); O'Brien 20/30; NULL 10/20 | 48.33, 66.67, NULL label 50.00 |
 | Say/Do by Sprint, Team A | 9/10; 0/0; 10/10 | 90.00, **NULL** (no bar, no error), 100.00 |
-| Say/Do by Month (all years) | Jan: (9+10+10+5)/(10+40+10+10); Feb 15/20; Apr 10/20 | 48.57, 75.00, 50.00 |
-| Say/Do by Year & Month | 19/50; 15/20; 10/20; 15/20 | 38.00, 75.00, 50.00, 75.00 (tie) |
+| Say/Do by Month (all years) | Jan: (9+10+10+5)/(10+40+10+10); Feb 15/20; Apr 10/20 | Jan 48.57, Feb 75.00, Apr 50.00 (labels Jan/Feb/Apr, month order) |
+| Say/Do by Year & Month | 19/50; 15/20; 10/20; 15/20 | Jan 2025 38.00, Feb 2025 75.00, Apr 2025 50.00, Jan 2026 75.00 (tie) |
 | Say/Do by Year | 2025: 44/90; 2026: 15/20 | 48.89, 75.00 |
 | Velocity by Team (AVG ignores NULL) | O'Brien 15.50; A (20 + 22.25)/2 = 21.125; B 30; D 15.50 | 15.50, **21.13** (rounds half up), 30.00, 15.50 (tie) |
-| Velocity, Team A in Sprint 25.02 | only a NULL value | Team A with NULL value |
+| Velocity, Team A in Sprint = 2 (Sprint 25.02) | only a NULL value | Team A with NULL value |
 | Scope Churn by Team | O'Brien (5+2)/(20+10); A 3/(11+0+10); B 0/40; D 5/25 | 23.33, 14.29, 0.00, 20.00 |
 | Estimate Changed by Team | O'Brien 2/12; A 1/10; B 0/10; D 3/6 | 16.67, 10.00, 0.00, 50.00 |
 | % Estimated by Team | O'Brien 11/12; A 9/10; B 10/10; D 6/6 | 91.67, 90.00, 100.00, 100.00 (tie) |
 | Say/Do by Team, Team = Team E | no fact rows | empty result |
 | Say/Do by Team, Level 2 IS NULL | Team D only | Team D 50.00 |
 | Say/Do by Team, Level 2 = Mgr O'Brien | apostrophe bound as a value | O'Brien Squad 66.67 |
+| Say/Do by Quarter (all years) | Q1: (9+10+0+15+10+5)/(10+40+0+20+10+10) = 49/90; Q2 10/20 | Q1 54.44, Q2 50.00 |
+| Say/Do by Year & Sprint, Team A | key = start date; label "<sprint> <year>" (SQL/019) | Sprint 25.01 2025 90.00, Sprint 25.02 2025 NULL, Sprint 26.01 2026 100.00 |
+| Say/Do by Year & Month, Month = 1 (a key) | Jan 2025 19/50; Jan 2026 15/20 | Jan 2025 38.00, Jan 2026 75.00 |
 
 To add a case: add rows to `fixture-data.sql` if needed, work out the answer by hand, add it to `expected.tsv`
 (format in the file's header), and add it to this table.

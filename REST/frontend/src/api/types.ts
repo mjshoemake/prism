@@ -16,6 +16,8 @@ export interface FocusLevel {
   name: string;
   /** Column of the STAR schema this level groups by (e.g. "year_month"). Informational: requests use the pk. */
   column_name: string;
+  /** The level a bar click drills down to (same focus area); null = no drill-down: the click only adds the filter. */
+  drill_to_focus_level_pk: number | null;
 }
 
 /**
@@ -36,7 +38,7 @@ export interface MetricInfo {
   scale_max: number | null;
 }
 
-/** A drill-down filter in a chart request: "focus level = value" (null matches empty values). */
+/** A drill-down filter in a chart request: "focus level = key" (a ChartRow's key; null matches empty values). */
 export interface ChartFilter {
   focus_level_pk: number;
   operator: 'eq';
@@ -50,8 +52,13 @@ export interface ChartDataRequest {
   filters: ChartFilter[];
 }
 
-/** One bar: the focus-level value and the metric's value (null when it can't be calculated, e.g. 0 ÷ 0). */
+/**
+ * One bar: its key, its label and the metric's value (null when it can't be calculated, e.g. 0 ÷ 0).
+ * The key identifies the bar (send it back as a filter value); the label is only what the bar shows, and may repeat
+ * (e.g. "Sprint 1" of two years). For a level without a separate key column, key and label are the same value.
+ */
 export interface ChartRow {
+  key: string | null;
   label: string | number | null;
   value: number | null;
 }

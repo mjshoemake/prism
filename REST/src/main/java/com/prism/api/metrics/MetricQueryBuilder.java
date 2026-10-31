@@ -11,15 +11,19 @@ import java.util.regex.Pattern;
  * expressions, its fact table, the dimensions and the focus-level columns come from the metadata tables, and filter
  * values are bound as parameters.
  * <p>
- * Shape of every query:
+ * Shape of every query (step 1e: each focus level has a KEY column to group, sort and filter by, and a LABEL column
+ * to show; a level without a key column uses its label as the key, which gives the pre-1e query):
  * <pre>
- * SELECT &lt;dim&gt;.&lt;column&gt; AS label, &lt;calculation&gt; AS value
+ * SELECT (&lt;dim&gt;.&lt;key&gt;)::TEXT AS key, &lt;dim&gt;.&lt;label&gt; AS label, &lt;calculation&gt; AS value
  * FROM &lt;metric's fact table&gt; &lt;alias&gt;
  * [JOIN &lt;dimension&gt; &lt;alias&gt; ON &lt;fact&gt;.&lt;column&gt; = &lt;dimension&gt;.&lt;column&gt; ...]
- * [WHERE &lt;dim&gt;.&lt;column&gt; = ? AND ...]
- * GROUP BY &lt;dim&gt;.&lt;column&gt;
- * ORDER BY &lt;dim&gt;.&lt;column&gt;
+ * [WHERE &lt;dim&gt;.&lt;key&gt; = ? AND ...]
+ * GROUP BY &lt;dim&gt;.&lt;key&gt;[, &lt;dim&gt;.&lt;label&gt;]
+ * ORDER BY &lt;dim&gt;.&lt;key&gt;
  * </pre>
+ * The key is returned as text, so the browser can send it back unchanged as a filter value (bound untyped, so
+ * Postgres compares it with the column's own type: dates, numbers, text). Each key must have one label; a key with
+ * two labels would give two bars with the same key.
  * Only the dimensions a query needs are joined (SQL/016): the grouping level's, the filters', and any dimension whose
  * alias the metric's expressions use. Joins are INNER, so every fact row must have its dimension row (a foreign key;
  * {@code review_star_schema} rule S4).
@@ -56,13 +60,15 @@ public final class MetricQueryBuilder {
             throw new IllegalStateException("Metric " + metric.metricPk() + " has no fact table.");
         }
         var joined = new HashSet<Integer>(dimensionsUsedBy(metric, fact));
-        var groupColumn = column(metric, fact, groupBy, joined);
+        var alias = alias(metric, fact, groupBy, joined);
+        var keyColumn = qualified(alias, groupBy, groupBy.keyColumn());
+        var labelColumn = qualified(alias, groupBy, groupBy.columnName());
         var calculation = calculation(metric);
 
         var parameters = new ArrayList<String>();
         var conditions = new ArrayList<String>();
         for (var filter : filters) {
-            var column = column(metric, fact, filter.level(), joined);
+            var column = qualified(alias(metric, fact, filter.level(), joined), filter.level(), filter.level().keyColumn());
             if (filter.value() == null) {
                 conditions.add(column + " IS NULL");
             } else {
@@ -72,13 +78,17 @@ public final class MetricQueryBuilder {
         }
 
         var sql = new StringBuilder()
-                .append("SELECT ").append(groupColumn).append(" AS label, ").append(calculation).append(" AS value\n")
+                .append("SELECT (").append(keyColumn).append(")::TEXT AS key, ").append(labelColumn).append(" AS label, ")
+                .append(calculation).append(" AS value\n")
                 .append(fromClause(fact, joined)).append('\n');
         if (!conditions.isEmpty()) {
             sql.append("WHERE ").append(String.join(" AND ", conditions)).append('\n');
         }
-        sql.append("GROUP BY ").append(groupColumn).append('\n')
-           .append("ORDER BY ").append(groupColumn);
+        sql.append("GROUP BY ").append(keyColumn);
+        if (!labelColumn.equals(keyColumn)) {
+            sql.append(", ").append(labelColumn);
+        }
+        sql.append('\n').append("ORDER BY ").append(keyColumn);
         return new MetricQuery(sql.toString(), List.copyOf(parameters));
     }
 
@@ -153,16 +163,21 @@ public final class MetricQueryBuilder {
         return name != null && IDENTIFIER.matcher(name).matches();
     }
 
-    /** {@code alias.column} for a focus level; records the dimension as joined. */
-    private static String column(MetricDefinition metric, FactDefinition fact, FocusLevelDefinition level,
-                                 Set<Integer> joined) {
-        if (!isIdentifier(level.columnName())) {
-            throw new IllegalStateException("Focus level " + level.focusLevelPk() + " has an invalid column name.");
-        }
+    /** The alias of a focus level's dimension in this query; records the dimension as joined. */
+    private static String alias(MetricDefinition metric, FactDefinition fact, FocusLevelDefinition level,
+                                Set<Integer> joined) {
         var join = fact.join(level.dimensionPk()).orElseThrow(() -> new IllegalArgumentException(
                 "Focus level '" + level.name() + "' can't be used with metric '" + metric.name()
                         + "': its dimension isn't linked to the metric's fact table."));
         joined.add(join.dimensionPk());
-        return join.dimension().alias() + "." + level.columnName();
+        return join.dimension().alias();
+    }
+
+    /** {@code alias.column}; the column must be a plain identifier. */
+    private static String qualified(String alias, FocusLevelDefinition level, String column) {
+        if (!isIdentifier(column)) {
+            throw new IllegalStateException("Focus level " + level.focusLevelPk() + " has an invalid column name.");
+        }
+        return alias + "." + column;
     }
 }

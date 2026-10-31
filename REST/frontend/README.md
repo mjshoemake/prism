@@ -96,8 +96,8 @@ prototypes/                          Old experiments, not built (see prototypes/
 
 1. Load the metrics (`GET /api/metrics/list`); select the first. Load focus areas; select the first.
 2. Load that area's focus levels; select the level last used in that area, else the first.
-3. `POST /api/metrics/data` with `{metric_pk, focus_level_pk, filters}` — IDs and values only. Rows come back as `[{label, value}]`.
-4. Clicking a bar adds the filter `<level> = <bar label>` and moves to the next level. Changing the metric, the level or the filters re-runs step 3. Filters are kept when the metric or the area changes.
+3. `POST /api/metrics/data` with `{metric_pk, focus_level_pk, filters}` — IDs and values only. Rows come back as `[{key, label, value}]`: the label is shown on the bar; the key identifies it (labels may repeat, e.g. "Sprint 1" of two years).
+4. Clicking a bar adds the filter `<level> = <bar label>` and moves to the level's drill target (`drill_to_focus_level_pk`, from the API). A level without one only adds the filter. An area can hold several drill paths (e.g. Year → … → Year & Sprint, and Quarter → Month → Sprint); the order levels are listed in is for display only. Changing the metric, the level or the filters re-runs step 3. Filters are kept when the metric or the area changes.
 
 ### Adding a metric
 

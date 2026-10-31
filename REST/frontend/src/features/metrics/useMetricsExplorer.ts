@@ -3,14 +3,17 @@ import { errorMessage, isAbortError } from '../../api/client';
 import { metricsApi } from '../../api/metricsApi';
 import type { ChartRow, FocusArea, FocusLevel, MetricInfo } from '../../api/types';
 import { useToast } from '../../components/toast/useToast';
-import { formatLabel, hasFilter, toRequestFilters, type Filter } from './filters';
+import { formatLabel, hasFilter, toRequestFilters, type ChartBar, type Filter } from './filters';
 
 /**
  * State and actions for the drill-down metrics explorer:
  *
  *   focus area ──▶ focus levels ──▶ chart rows (grouped by the selected level, filtered by `filters`)
  *
- * Clicking a bar adds "<level> = <bar label>" as a filter and drills down to the next focus level.
+ * Clicking a bar adds "<level> = <bar>" as a filter (the bar's key is sent, its label shown) and drills down to the level's drill target
+ * (`drill_to_focus_level_pk`). A level without one doesn't drill: the click only adds the filter. A focus area can
+ * hold several drill paths (e.g. Year → Year & Quarter → … and Quarter → Month → Sprint); the order levels are listed
+ * in is for display only.
  * The last level chosen in each focus area is remembered for when the user switches back.
  * Filters are kept when the metric changes, so the same selection can be viewed through another metric.
  * Requests carry only IDs and values; the server builds the SQL.
@@ -117,26 +120,28 @@ export function useMetricsExplorer(metric: MetricInfo | null) {
     [selectedArea],
   );
 
-  /** Bar click: filter on the clicked value, then move to the next (deeper) focus level. */
+  /** Bar click: filter on the clicked value, then move to the level's drill target, if it has one. */
   const drillDown = useCallback(
-    (label: string | null) => {
+    (bar: ChartBar) => {
       if (!selectedLevel) return;
 
-      if (hasFilter(filters, selectedLevel.focus_level_pk, label)) {
+      if (hasFilter(filters, selectedLevel.focus_level_pk, bar.key)) {
         showToast('Filter already exists', 'warning');
       } else {
-        setFilters((prev) => [...prev, { focus_level_pk: selectedLevel.focus_level_pk, name: selectedLevel.name, value: label }]);
-        showToast(`Added filter: ${selectedLevel.name} = ${formatLabel(label)}`, 'success');
+        setFilters((prev) => [
+          ...prev,
+          { focus_level_pk: selectedLevel.focus_level_pk, name: selectedLevel.name, value: bar.key, label: bar.label },
+        ]);
+        showToast(`Added filter: ${selectedLevel.name} = ${formatLabel(bar.label)}`, 'success');
       }
 
-      const index = focusLevels.findIndex((l) => l.focus_level_pk === selectedLevel.focus_level_pk);
-      const nextLevel = index >= 0 ? focusLevels[index + 1] : undefined;
+      const nextLevel = nextDrillLevel(focusLevels, selectedLevel);
       if (nextLevel) {
         setSelectedLevel(nextLevel);
         rememberLevel(lastLevelByArea.current, selectedArea, nextLevel);
         showToast(`Drilled down to: ${nextLevel.name}`, 'info');
       } else {
-        showToast('No deeper level available', 'warning');
+        showToast(`${selectedLevel.name} doesn't drill down further`, 'info');
       }
     },
     [filters, focusLevels, selectedArea, selectedLevel, showToast],
@@ -147,7 +152,7 @@ export function useMetricsExplorer(metric: MetricInfo | null) {
       const removed = filters[index];
       if (!removed) return;
       setFilters((prev) => prev.filter((_, i) => i !== index));
-      showToast(`Removed filter: ${removed.name} = ${formatLabel(removed.value)}`, 'info');
+      showToast(`Removed filter: ${removed.name} = ${formatLabel(removed.label)}`, 'info');
     },
     [filters, showToast],
   );
@@ -173,6 +178,12 @@ export function useMetricsExplorer(metric: MetricInfo | null) {
     removeFilter,
     clearFilters,
   };
+}
+
+/** The level a bar click on `level` drills down to: its drill target, if that level is loaded; else none. */
+export function nextDrillLevel(levels: readonly FocusLevel[], level: FocusLevel): FocusLevel | undefined {
+  if (level.drill_to_focus_level_pk == null) return undefined;
+  return levels.find((l) => l.focus_level_pk === level.drill_to_focus_level_pk);
 }
 
 function rememberLevel(memory: Record<number, number>, area: FocusArea | null, level: FocusLevel): void {

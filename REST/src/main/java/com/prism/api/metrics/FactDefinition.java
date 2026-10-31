@@ -9,9 +9,10 @@ import java.util.Optional;
  * {@link MetricsMetadataCache}. Metric expressions use the fact's alias; the query builder adds a JOIN for each linked
  * dimension a query needs.
  *
- * @param joins linked dimensions in a fixed order (by dimension_pk), so generated SQL is stable
+ * @param dataSourcePk the data source the fact lives in (picks the {@link MetricDataProvider})
+ * @param joins        linked dimensions in a fixed order (by dimension_pk), so generated SQL is stable
  */
-public record FactDefinition(int factPk, TableDefinition table, List<Join> joins) {
+public record FactDefinition(int factPk, int dataSourcePk, TableDefinition table, List<Join> joins) {
 
     /** {@code fact.factColumn = dimension.dimensionColumn}; both columns are plain identifiers. */
     public record Join(int dimensionPk, TableDefinition dimension, String factColumn, String dimensionColumn) {

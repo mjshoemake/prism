@@ -159,10 +159,13 @@ This is Prism's core interaction. Files involved: `MetricBarChart.tsx` → `Char
 1. The user clicks the bar **"Sarah Williams"** while the focus level is **Director**.
 2. `MetricBarChart`'s Chart.js `onClick` finds the bar's label and calls `onBarClick("Sarah Williams")`.
 3. That prop is `explorer.drillDown`, from `useMetricsExplorer`. It:
-   - adds the filter `{ focus_level_pk: 10, name: "Director", value: "Sarah Williams" }`
+   - adds the filter `{ focus_level_pk: 10, name: "Director", value: <the bar's key>, label: "Sarah Williams" }`:
+     `value` (the key) is what the server filters on, `label` is what the filter chip shows. They differ for
+     levels with a separate key column, e.g. Year & Month: key "2024 12", label "Dec 2024" (step 1e)
      (or warns "Filter already exists");
-   - moves `selectedLevel` to the **next level** in `focusLevels` (the API returns them in drill-down
-     order, `sort_order`), or warns "No deeper level available";
+   - moves `selectedLevel` to the level's **drill target**, `drill_to_focus_level_pk` (`nextDrillLevel`); a
+     level without one stays put and says "<level> doesn't drill down further". The API lists levels in
+     display order (`sort_order`), which is not the drill order: an area can hold several drill paths;
    - remembers that level for this focus area, so switching areas and back returns to it.
 4. Because `selectedLevel` and `filters` changed, the hook's data effect re-runs:
    `metricsApi.getChartData(...)` posts `{ metric_pk, focus_level_pk, filters }` — IDs and values only.
@@ -596,9 +599,9 @@ folders.
 | Term | Meaning |
 |---|---|
 | Focus area | A dimension to slice by (Time, Organization). |
-| Focus level | A level within a focus area (Year, Month…). The chart groups by it; `sort_order` defines drill-down order. |
+| Focus level | A level within a focus area (Year, Month…). The chart groups by it; `sort_order` is display order; `drill_to_focus_level_pk` is the level a click drills to. |
 | Filter | `level = value` condition; filters combine with AND and persist when you change focus area. |
-| Drill-down | Bar click → add filter + move to the next focus level. |
+| Drill-down | Bar click → add filter + move to the level's drill target (if it has one). |
 | Session | The stored login response (`prism_auth` in `localStorage`). |
 
 **Related documents**

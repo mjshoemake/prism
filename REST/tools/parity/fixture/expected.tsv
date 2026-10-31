@@ -1,10 +1,12 @@
 # Hand-checked expected results for fixture-data.sql (worked out by hand; see ../README.md).
 # One case per "##" line: ## <case name> | <metric name> | <group-by focus level> | <filters>
 #   filters: "Level=value" joined by " & "; value \N means IS NULL; "-" means no filter.
+#   A filter value is the level's KEY (SQL/018: Sprint = sprint_num, Month = sprint_month, Year & Month = year_month,
+#   ...); for a level without a key column (Year, Team, Level N) it is the label.
 # Then the expected rows in order, "label|value"; an empty value means NULL (no bar); \N label = NULL label.
 # A case with no rows expects an empty result.
 
-## 38% not 57.5% (OVERVIEW 4.1) | Say/Do Ratio | Level 2 | Sprint=Sprint 25.01
+## 38% not 57.5% (OVERVIEW 4.1) | Say/Do Ratio | Level 2 | Sprint=1
 Mgr Lee|38.00
 
 ## ratio of sums across sprints | Say/Do Ratio | Team | -
@@ -23,16 +25,16 @@ Sprint 25.01|90.00
 Sprint 25.02|
 Sprint 26.01|100.00
 
-## Month (all years) merges January 2025 and 2026 | Say/Do Ratio | Month | -
-1|48.57
-2|75.00
-4|50.00
+## Month (all years) merges January 2025 and 2026; month-name labels in month order | Say/Do Ratio | Month | -
+Jan|48.57
+Feb|75.00
+Apr|50.00
 
-## Year & Month keeps them apart; tie 75.00 | Say/Do Ratio | Year & Month | -
-2025-01|38.00
-2025-02|75.00
-2025-04|50.00
-2026-01|75.00
+## Year & Month keeps them apart; tie 75.00; "Mon YYYY" labels in key order | Say/Do Ratio | Year & Month | -
+Jan 2025|38.00
+Feb 2025|75.00
+Apr 2025|50.00
+Jan 2026|75.00
 
 ## Year | Say/Do Ratio | Year | -
 2025|48.89
@@ -44,7 +46,7 @@ Team A|21.13
 Team B|30.00
 Team D|15.50
 
-## group whose only value is NULL | Velocity | Team | Sprint=Sprint 25.02 & Team=Team A
+## group whose only value is NULL | Velocity | Team | Sprint=2 & Team=Team A
 Team A|
 
 ## GREATEST per row, then ratio of sums | Scope Churn | Team | -
@@ -72,3 +74,16 @@ Team D|50.00
 
 ## apostrophe in a filter value | Say/Do Ratio | Team | Level 2=Mgr O'Brien
 O'Brien Squad|66.67
+
+## Quarter labels Q1..Q4 in quarter order (all years) | Say/Do Ratio | Quarter | -
+Q1|54.44
+Q2|50.00
+
+## Year & Sprint: label "<sprint> <year>" (SQL/019), key = start date, so years stay apart | Say/Do Ratio | Year & Sprint | Team=Team A
+Sprint 25.01 2025|90.00
+Sprint 25.02 2025|
+Sprint 26.01 2026|100.00
+
+## filter by a key: Month = 1 means January of every year | Say/Do Ratio | Year & Month | Month=1
+Jan 2025|38.00
+Jan 2026|75.00

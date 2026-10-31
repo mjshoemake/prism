@@ -1,12 +1,20 @@
 import type { ChartFilter } from '../../api/types';
 
-/** A drill-down filter: "<focus level> = <value>", added by clicking a bar. */
+/** A clicked bar: its key (sent as the filter value) and its label (shown). */
+export interface ChartBar {
+  key: string | null;
+  label: string | null;
+}
+
+/** A drill-down filter: "<focus level> = <bar>", added by clicking a bar. */
 export interface Filter {
   focus_level_pk: number;
   /** Display name of the focus level (e.g. "Team"). */
   name: string;
-  /** The clicked bar's label; null for bars whose value is empty. */
+  /** The clicked bar's key: what the server filters on. Null for bars whose key is empty. */
   value: string | null;
+  /** The clicked bar's label: what the filter shows (e.g. "Dec 2024" for key "2024 12"). */
+  label: string | null;
 }
 
 /** Shown for empty focus-level values (bars and filters). */

@@ -18,7 +18,7 @@ class MetricQueryBuilderTests {
     private static final int OTHER_DIM = 9;
 
     /** The demo schema, as SQL/013 seeds it. */
-    static final FactDefinition DEMO_FACT = new FactDefinition(1, new TableDefinition("prism", "Sprint_Metrics_Fact", "smf"),
+    static final FactDefinition DEMO_FACT = new FactDefinition(1, 1, new TableDefinition("prism", "Sprint_Metrics_Fact", "smf"),
             List.of(new FactDefinition.Join(SPRINT_DIM, new TableDefinition("prism", "Sprint_Dim", "sd"), "sprint_pk", "sprint_pk"),
                     new FactDefinition.Join(TEAM_DIM, new TableDefinition("prism", "Team_Dim", "td"), "team_pk", "team_pk")));
 
@@ -66,7 +66,7 @@ class MetricQueryBuilderTests {
         var query = MetricQueryBuilder.build(metric(MetricType.PERCENTAGE, "smf.a", "smf.b", null), TEAM,
                 List.of(new MetricQueryBuilder.ResolvedFilter(YEAR, "2024' OR '1'='1"),
                         new MetricQueryBuilder.ResolvedFilter(TEAM, null)));
-        assertTrue(query.sql().startsWith("SELECT td.team_name AS label, "), query.sql());
+        assertTrue(query.sql().startsWith("SELECT (td.team_name)::TEXT AS key, td.team_name AS label, "), query.sql());
         assertTrue(query.sql().contains("WHERE sd.sprint_year = ? AND td.team_name IS NULL\n"), query.sql());
         assertTrue(query.sql().endsWith("GROUP BY td.team_name\nORDER BY td.team_name"), query.sql());
         assertFalse(query.sql().contains("OR '1'='1"), query.sql());
@@ -103,6 +103,27 @@ class MetricQueryBuilderTests {
         // Not an alias: a quoted name, part of a longer name, or a number.
         assertEquals(Set.of(), MetricQueryBuilder.dimensionsUsedBy(
                 metric(MetricType.SUM, "\"x\".td + smf.std.a + 1.5 + smf.a", null, null), DEMO_FACT));
+    }
+
+    @Test
+    void keyColumnGroupsSortsAndFiltersLabelIsShown() {
+        var month = new FocusLevelDefinition(5, 1, SPRINT_DIM, "Month", "month_abbr", "sprint_month");
+        var sprint = new FocusLevelDefinition(6, 1, SPRINT_DIM, "Sprint", "sprint_name", "sprint_num");
+        var query = MetricQueryBuilder.build(metric(MetricType.SUM, "smf.a", null, null), month,
+                List.of(new MetricQueryBuilder.ResolvedFilter(sprint, "26"), new MetricQueryBuilder.ResolvedFilter(month, null)));
+        assertTrue(query.sql().startsWith("SELECT (sd.sprint_month)::TEXT AS key, sd.month_abbr AS label, "), query.sql());
+        assertTrue(query.sql().contains("WHERE sd.sprint_num = ? AND sd.sprint_month IS NULL\n"), query.sql());
+        assertTrue(query.sql().endsWith("GROUP BY sd.sprint_month, sd.month_abbr\nORDER BY sd.sprint_month"), query.sql());
+        assertEquals(List.of("26"), query.parameters());
+        assertEquals("sprint_month", month.keyColumn());
+        assertEquals("sprint_year", YEAR.keyColumn());
+    }
+
+    @Test
+    void invalidKeyColumnIsRefused() {
+        var bad = new FocusLevelDefinition(7, 1, SPRINT_DIM, "Bad", "sprint_name", "x; DROP TABLE y");
+        assertThrows(IllegalStateException.class,
+                () -> MetricQueryBuilder.build(metric(MetricType.SUM, "smf.a", null, null), bad, List.of()));
     }
 
     @Test
@@ -150,7 +171,7 @@ class MetricQueryBuilderTests {
 
     @Test
     void aFactAndADimensionCantShareAnAlias() {
-        assertThrows(IllegalArgumentException.class, () -> new FactDefinition(1, new TableDefinition("p", "F", "x"),
+        assertThrows(IllegalArgumentException.class, () -> new FactDefinition(1, 1, new TableDefinition("p", "F", "x"),
                 List.of(new FactDefinition.Join(1, new TableDefinition("p", "D", "x"), "d_pk", "d_pk"))));
     }
 }

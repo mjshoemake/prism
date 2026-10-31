@@ -43,7 +43,7 @@ public class MetricDraftService {
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
     /** Example fact for the SQL preview: the demo schema (fact smf, dimensions sd and td), as seeded by SQL/013. */
-    private static final FactDefinition PREVIEW_FACT = new FactDefinition(0,
+    private static final FactDefinition PREVIEW_FACT = new FactDefinition(0, 0,
             new TableDefinition("prism", "Sprint_Metrics_Fact", "smf"),
             List.of(new FactDefinition.Join(1, new TableDefinition("prism", "Sprint_Dim", "sd"), "sprint_pk", "sprint_pk"),
                     new FactDefinition.Join(2, new TableDefinition("prism", "Team_Dim", "td"), "team_pk", "team_pk")));

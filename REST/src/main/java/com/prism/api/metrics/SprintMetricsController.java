@@ -36,7 +36,7 @@ public class SprintMetricsController {
     }
 
     /**
-     * Chart rows {@code [{label, value}, ...]}. The body holds only IDs and values ({@link ChartDataRequest}); the
+     * Chart rows {@code [{key, label, value}, ...]} in key order; send a row's {@code key} back as a filter value. The body holds only IDs and values ({@link ChartDataRequest}); the
      * server builds the SQL from metadata. 400 {success:false, message} for an unknown metric or focus level, an
      * unsupported operator, or too many filters.
      */

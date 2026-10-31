@@ -24,8 +24,8 @@ the real JDBC driver (2026-10-21).
 1. **Feature branch `feature-metamodel`: fact/dimension model** (created by the owner after the MCP merge,
    2026-10-24; prove-or-fail-fast, merge when confident). Steps, each passing the parity check before the next:
    (a) ✅ SQL/013 tables + demo seed; (b) ✅ SQL/015 focus levels → dimensions, label/key columns, drill pointers
-   (#11); (c) ✅ (in review) SQL/016 + query builder builds FROM/JOIN from the metadata, `DEMO_FROM_CLAUSE` deleted;
-   (d) data-provider seam, drill pointers in the API and UI; then switch on keys.
+   (#11); (c) ✅ SQL/016–017 + query builder builds FROM/JOIN from the metadata, `DEMO_FROM_CLAUSE` deleted (parity passed on the owner's Mac, 2026-10-30);
+   (d) ✅ data-provider seam, drill pointers in the API and UI (parity passed on the owner's Mac, 2026-10-31); (e) ✅ switch on keys (baseline re-frozen 2026-10-31). **Branch complete: merge `feature-metamodel`.**
    - ✅ New tables (SQL/013, 2026-10-24): `Data_Sources` (separate database and API connection columns, exactly one
      filled; `db_connection_method` `prism_database` for the demo schema), `Facts`, `Dimensions`,
      `Facts_Dimensions_Assoc` (join columns; a fact and its dimensions share a data source). Seeded with the demo
@@ -37,10 +37,22 @@ the real JDBC driver (2026-10-21).
      (`key_column_name`: group, sort and filter by it, unique per bar, one label per key; owner, 2026-10-24); drill
      pointers. Not read by the code yet. **Owner:** run SQL/015, run the parity check (expect 0 differing values;
      the new level and changed drill path show as missing / unexpected cases), then `--freeze` and commit the baseline.
-   - Switch on keys (after 1c, backlog #11): group/order by the key, return the key with each chart row, and filter
-     by the key. Deliberate result change (sprint order, years no longer merged where the key separates them), so
-     agree the differences and freeze a new baseline. Month-name labels (Jan, Feb) need label columns in the demo
-     dimension, e.g. `month_name`.
+   - ✅ Keys switched on (step 1e, 2026-10-31, backlog #11): SQL/018 adds generated label columns to the
+     demo `Sprint_Dim` and sets each Time level's label/key (owner: only the sprint key carries the year; Year &
+     Quarter "Q4 2024", Year & Month "Dec 2024", Quarter "Q4", Month "Dec", sprints "Sprint 26"). The builder groups,
+     sorts and filters by the key; the API returns `{key, label, value}`; the UI sends the key and shows the label.
+     Parity harness filters by keys; hand-checked answers updated (Month: Jan/Feb/Apr; Year & Month: Jan 2025 …;
+     Sprint filters by number) plus 3 new hand-worked cases (Quarter, Year & Sprint, filter by a key).
+     Reviewed in the Claude session on a copy of the owner's database, every metric × level before vs after: **no
+     value changes**; labels change on Year & Quarter, Year & Month, Quarter, Month, Year & Sprint; order changes
+     only on Year & Sprint and Sprint (now date / number order); Year and Organization levels unchanged. Browser
+     check: clicks send keys ("2024 Q4", "2024 12", "2024-12-23"), chips show labels. ✅ On the owner's Mac
+     (2026-10-31): before freezing, every difference was a label or sprint-order change with identical values
+     (hand-checked 18 cases, 0 differences); baseline re-frozen; then 50,336 cases, 190,668 rows, 0 / 0 / 0.
+   - Year & Sprint label with the year at the end (owner, 2026-10-31: across years, "Sprint 26" alone can't be told
+     apart): **SQL/019**, label `year_sprint_label` "Sprint 26 2024"; key unchanged, so a label-only change. The
+     all-years Sprint level keeps "Sprint 26". **Owner:** run 019, parity (expect differences only in Year & Sprint
+     labels; hand-checked 0), then `--freeze`.
    - ✅ `Metrics` point to a fact (SQL/016 `Metrics.fact_pk`, 2026-10-27); `DEMO_FROM_CLAUSE` deleted. The cache
      loads facts, dimensions and links; the builder writes FROM the metric's fact and JOINs only the dimensions a
      query needs (group-by level, filters, dimension aliases in the metric's expressions), with alias-qualified
@@ -51,11 +63,19 @@ the real JDBC driver (2026-10-21).
      First run on the owner's database (2026-10-30): "Unknown focus level: 7", because its second area is named
      "Team Hierarchy" and 015 matched areas by name, so it got no `dimension_pk` and no drill pointers. **SQL/017**
      repairs that by the columns instead of the name (checked on a copy with the renamed area: 13 levels load,
-     old vs new 21,050 cases identical). **Owner:** run 017, then the parity check again.
+     old vs new 21,050 cases identical). ✅ After 017, parity on the owner's Mac (2026-10-30): 50,336 cases,
+     190,685 rows, 0 differing / missing / unexpected; hand-checked dataset 0 differences; both wrong-calculation
+     checks detected.
    - **Drill-down pointer** `Focus_Levels.drill_to_focus_level_pk` (✅ metadata, SQL/015). A level without one doesn't
      drill: clicking adds the filter and stays. Checks: same focus area (FK), no loops (trigger). Seed: two Time paths
      (owner, 2026-10-24), Year → Year & Quarter → Year & Month → Year & Sprint, and Quarter → Month → Sprint;
-     Organization: Level 5 → … → Team. Still to do: the API returns the pointer and the UI drills by it (step d).
+     Organization: Level 5 → … → Team. ✅ Step 1d (2026-10-30): the focus-levels endpoint returns
+     `drill_to_focus_level_pk` and the UI drills by it; a level without one only adds the filter ("… doesn't drill
+     down further"). Checked: the UI follows Year → … → Year & Sprint, Quarter → Month → Sprint, Level 5 → … → Team.
+   - ✅ Data-provider seam (step 1d, 2026-10-30): `MetricDataProvider` (source-neutral: data source, metric, level,
+     filters), `MetricDataProviders` (by connection method; none → 400), `PrismDatabaseDataProvider`
+     (`prism_database`). Checked in the Claude session: 300 random cases through the real service vs the original
+     builder, identical. ✅ Parity on the owner's Mac (2026-10-31): 50,336 cases, 0 differing / missing / unexpected.
    - Server reaches data through one "metric data provider" seam (database now, client API later).
    - **Parity first:** ✅ permanent check built (2026-10-21): `MetricParityTests` through the real service, a
      hand-checked dataset (zero denominators, NULL values and labels, empty groups, apostrophes, ties, rounding,

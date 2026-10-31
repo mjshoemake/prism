@@ -22,7 +22,7 @@ export function ActiveFilters({ filters, onRemove, onClear }: ActiveFiltersProps
                 className="list-group-item d-flex justify-content-between align-items-center"
               >
                 <span>
-                  <strong>{f.name}:</strong> {formatLabel(f.value)}
+                  <strong>{f.name}:</strong> {formatLabel(f.label)}
                 </span>
                 <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => onRemove(i)}>
                   Remove

@@ -1,4 +1,5 @@
 import type { ChartRow, FocusLevel, MetricInfo } from '../../../api/types';
+import type { ChartBar } from '../filters';
 import { ErrorAlert } from '../../../components/ErrorAlert';
 import { LoadingSpinner } from '../../../components/LoadingSpinner';
 import { MetricBarChart } from './MetricBarChart';
@@ -9,7 +10,7 @@ interface ChartPanelProps {
   rows: ChartRow[];
   loading: boolean;
   error: string | null;
-  onBarClick: (label: string | null) => void;
+  onBarClick: (bar: ChartBar) => void;
 }
 
 export function ChartPanel({ metric, selectedLevel, rows, loading, error, onBarClick }: ChartPanelProps) {

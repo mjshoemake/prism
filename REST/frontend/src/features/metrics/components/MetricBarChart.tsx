@@ -2,7 +2,7 @@ import { BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, Toolt
 import { Bar } from 'react-chartjs-2';
 import type { ChartRow, MetricInfo } from '../../../api/types';
 import { palette } from '../../../theme/palette';
-import { formatLabel } from '../filters';
+import { formatLabel, type ChartBar } from '../filters';
 import { axisBounds, formatTick, formatValue, legendLabel } from '../metricFormat';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
@@ -12,13 +12,13 @@ interface MetricBarChartProps {
   /** Focus level display name, used in the tooltip. */
   levelName: string;
   metric: MetricInfo;
-  /** Called with the clicked bar's raw label (null for an empty value). */
-  onBarClick: (label: string | null) => void;
+  /** Called with the clicked bar's key (the filter value) and raw label (null for an empty value). */
+  onBarClick: (bar: ChartBar) => void;
 }
 
 /** Bar chart of one metric. Everything metric-specific (title, unit, decimals, scale) comes from `metric`. */
 export function MetricBarChart({ rows, levelName, metric, onBarClick }: MetricBarChartProps) {
-  const rawLabels = rows.map((row) => (row.label === null ? null : String(row.label)));
+  const bars: ChartBar[] = rows.map((row) => ({ key: row.key, label: row.label === null ? null : String(row.label) }));
   const labels = rows.map((row) => formatLabel(row.label));
   // null = no value (e.g. 0 ÷ 0): no bar, rather than a misleading 0.
   const values = rows.map((row) => (row.value === null ? null : Number(row.value)));
@@ -43,7 +43,7 @@ export function MetricBarChart({ rows, levelName, metric, onBarClick }: MetricBa
     maintainAspectRatio: false,
     animation: false,
     onClick: (_event, elements) => {
-      if (elements.length > 0) onBarClick(rawLabels[elements[0].index]);
+      if (elements.length > 0) onBarClick(bars[elements[0].index]);
     },
     plugins: {
       legend: { labels: { color: palette.white, font: { size: 12 } } },
