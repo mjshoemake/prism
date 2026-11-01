@@ -29,8 +29,8 @@ _Last updated: 2026-11-01._
    - **Owner:** see item 2 (run SQL/019, 020 and 021 together).
 2. **Dashboard redesign and per-chart y-axis scale** (owner, 2026-10-31; built 2026-10-31; roadmap #2 done this way):
    - Pages: the Metrics page became **Analysis** (`/#/analysis?dashboard=N`; `/#/metrics` redirects): a dashboard
-     picker with an Edit button, the shared focus area / level / filters, and a header label per chart ("Say/Do Ratio
-     by Sprint"), no metric picker; a user with no dashboards gets "My dashboard" (1 chart, first metric).
+     picker with an Edit button, the shared focus area / level / filters, and a header label per chart (the metric title,
+     "Say/Do Ratio"; "by <level>" dropped 2026-11-01), no metric picker; a user with no dashboards gets "My dashboard" (1 chart, first metric).
      **Dashboards** (`/#/dashboards`) is configuration only: a list (Name, Layout, Metrics; Open, Edit, Delete with
      confirm) and New. The **edit page** (`/#/dashboards/new`, `/#/dashboards/N/edit`): name, layout, a group box per
      visible chart area with its metric and y-axis scale; Save / Cancel return to Analysis (same dashboard) or the

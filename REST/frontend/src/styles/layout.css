@@ -76,7 +76,7 @@ label.form-label {
   flex-direction: column;
 }
 
-/* Header label of a chart area: "Say/Do Ratio by Sprint". */
+/* Header label of a chart area: the metric title, e.g. "Say/Do Ratio". */
 .dashboard-chart__title {
   font-size: 0.95rem;
   font-weight: 600;

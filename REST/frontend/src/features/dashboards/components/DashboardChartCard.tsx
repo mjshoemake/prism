@@ -18,7 +18,7 @@ interface DashboardChartCardProps {
 }
 
 /**
- * One chart area of a dashboard on the Analysis page: a header naming what it shows ("Say/Do Ratio by Sprint"), and
+ * One chart area of a dashboard on the Analysis page: a header with the metric's title ("Say/Do Ratio"), and
  * the chart grouped by the dashboard's shared level. The metric and scale are changed on the Edit page only.
  */
 export function DashboardChartCard({ position, metric, area, selectedLevel, chart, onBarClick }: DashboardChartCardProps) {
@@ -40,9 +40,9 @@ export function DashboardChartCard({ position, metric, area, selectedLevel, char
   };
 
   return (
-    <section className="card shadow-purple page-card dashboard-chart" data-position={position} aria-label={chartTitle(metric, selectedLevel)}>
+    <section className="card shadow-purple page-card dashboard-chart" data-position={position} aria-label={chartTitle(metric)}>
       <div className="card-header d-flex align-items-center gap-2">
-        <h2 className="dashboard-chart__title mb-0">{chartTitle(metric, selectedLevel)}</h2>
+        <h2 className="dashboard-chart__title mb-0">{chartTitle(metric)}</h2>
         {bounds && <span className="badge text-bg-secondary ms-auto dashboard-chart__scale">Axis {bounds}</span>}
       </div>
       <div className="card-body dashboard-chart__body">{renderBody()}</div>
@@ -50,8 +50,7 @@ export function DashboardChartCard({ position, metric, area, selectedLevel, char
   );
 }
 
-/** "Say/Do Ratio by Sprint", or "Say/Do Ratio" before a level is loaded, or "No metric". */
-function chartTitle(metric: MetricInfo | null, level: FocusLevel | null): string {
-  if (!metric) return 'No metric';
-  return level ? `${metric.title} by ${level.name}` : metric.title;
+/** The metric's title, e.g. "Say/Do Ratio" (owner, 2026-11-01: no "by <level>"), or "No metric". */
+function chartTitle(metric: MetricInfo | null): string {
+  return metric ? metric.title : 'No metric';
 }

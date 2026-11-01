@@ -60,7 +60,7 @@ metric and y-axis scale, and the focus area, level and filters are shared, so a 
 them all. Pages (owner, 2026-10-31): **Analysis** shows one of the user's dashboards (picked in its sidebar, with an
 Edit button; a user with none gets "My dashboard" with one chart); **Dashboards** is configuration only (a list with
 Open, Edit and Delete, and New); the **edit page** sets the name, the layout and, per chart area, the metric and the
-y-axis scale. Charts carry a header label ("Say/Do Ratio by Sprint") and no metric picker. No tabs yet (owner: one page
+y-axis scale. Charts carry a header label with the metric title ("Say/Do Ratio"; owner, 2026-11-01: no "by <level>") and no metric picker. No tabs yet (owner: one page
 per dashboard for now). A future **Metrics** menu will hold the fact, dimension and metric admin pages (roadmap #5).
 
 ## 3. Architecture
