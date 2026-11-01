@@ -5,11 +5,14 @@
 > and the numbered backlog** live in [CLAUDE.md](../CLAUDE.md). This file says *what to do next, in what order*.
 > Update it whenever an item is finished or a new one is agreed.
 
-_Last updated: 2026-10-31._
+_Last updated: 2026-11-01._
 
 ---
 
 ## 1. In review
+
+> **Owner, 2026-10-31:** items 1–2 (dashboards and the redesign) stay here until the metadata admin screens
+> (§2 #5) are built, so an administrator can configure a new STAR schema's facts, dimensions and metrics in the UI.
 
 1. **Saved dashboards** (owner, 2026-10-31; built 2026-10-31): a user creates dashboards with a layout of 1 chart
    (today's page), 2 (one above the other) or 4 (quadrants), and picks the metric for each chart area. Decisions
@@ -51,6 +54,47 @@ _Last updated: 2026-10-31._
    - Known gap (unchanged): a dashboard offers every focus area, not only those all its metrics share; a chart whose
      metric can't use the chosen level shows the server's message.
 
+3. **Read-only login for metric queries** (roadmap #3; built 2026-10-31):
+   - SQL/022 creates `prism_reader` (LOGIN; no superuser, create or replication rights; 20 connections) with
+     `default_transaction_read_only`, `statement_timeout 30s`, `lock_timeout 5s`, `idle_in_transaction_session_timeout
+     60s`, and `prism.grant_star_tables_to_reader()`: SELECT on exactly the STAR tables registered for
+     `prism_database` sources, everything else in those schemas revoked. Password never in a file: set it with
+     `ALTER ROLE prism_reader PASSWORD '…'` (setup.sh does it from `PRISM_READER_PASSWORD`). Plain SQL only, so the
+     script runs from psql, pgAdmin or any SQL tool (a first version used psql's `\if` and failed in pgAdmin;
+     fixed 2026-11-01).
+   - API: `MetricQueryConnection` (own Hikari pool `metric-query`, not a DataSource bean; `prism.metric-query.*`,
+     password from `PRISM_READER_PASSWORD`; Java-side query timeout 30s). Before the first query it checks the login
+     and refuses (503 with the reason) if it can't connect, is Prism's own login, isn't read-only, or can read `Users`
+     / `Metrics`; never falls back. `PrismDatabaseDataProvider` runs every chart query on it; timeouts → 503 "took
+     longer than 30 s"; each query audited (`METRIC_QUERY …`, no filter values). The parity harness still runs on its
+     own connection (`MetricQueryConnection.unchecked`): calculations are unchanged.
+   - Checked in the Claude session: SQL/022 run twice, and through setup.sh on two fresh databases (with and without
+     a password); as prism_reader: STAR tables readable, `Users` / `Metrics` refused, writes refused (also after
+     forcing a read-write transaction), no CREATE, can't re-grant itself, statement timeout. Compiled against the
+     real Spring 6.2.10, HikariCP 6.3.2, pgjdbc 42.7.7 jars (from `~/.m2`), 25 unit tests (5 new); a live run of the
+     real service through the real pool and driver: 910 metric × level × filter cases (11,795 rows) identical on
+     prism_reader and on Prism's own login; wrong password, Prism's login, a login that can read `Users` and a slow
+     query each answer 503 with their reason; the grant function removes an extra grant again.
+   - **Then (owner, 2026-11-01): STAR tables out of Prism's schema, SQL/023.** Only fact and dimension tables are the
+     STAR schema; Prism's metadata must not depend on them. The demo tables moved to schema `demo_star` (ALTER TABLE …
+     SET SCHEMA: data, keys, indexes, sequences, generated columns kept); `Facts`/`Dimensions.schema_name` updated;
+     the grant function replaced: `prism_reader` gets SELECT on the registered STAR tables and no privilege at all in
+     `prism` (not even USAGE; a registered table inside `prism` is refused with a warning). The API's login check now
+     works by catalog IDs and also refuses a login that can use `prism`. Migrations 001–019 stay as history: on a new
+     database they still create the demo tables in `prism` and 023 moves them. From 023 on, no Prism migration touches
+     STAR tables. The Advisor's SQL preview and the tests use `demo_star`; the parity fixture loads into `demo_star`.
+   - Checked for 023: no foreign keys, views, triggers or functions between Prism's and the STAR tables (before and
+     after); run twice; as prism_reader: `demo_star` readable, nothing in `prism` visible or usable; parity harness
+     (the real `MetricParityTests`): all 50,336 demo cases (190,668 rows) identical before and after the move, the
+     fixture (built with 023) matches its 18 hand-checked cases, the wrong-calculation check still detected; a new
+     database built by setup.sh (001 → 023) has exactly the same schema, grants and data as a migrated one; live API
+     run: 910 cases identical before (Prism's login, `prism`) and after (`prism_reader`, `demo_star`); refusals now also
+     for a login that can merely use `prism`; 40 unit tests.
+   - **Owner:** run SQL/022, then SQL/023 (psql or pgAdmin), then `ALTER ROLE prism_reader PASSWORD '…';`; add
+     `PRISM_READER_PASSWORD=…` to
+     `REST/.env.local`; build; open Analysis (charts show a 503 message saying what's missing until all is done); run
+     parity (`bash tools/parity/run.sh`): expect only the Year & Sprint label differences from 019, then `--freeze`.
+
 Article URLs are added to the Advisor content once the owner's *Agile Metrics* series is
 further along (owner, 2026-10-23).
 
@@ -60,6 +104,9 @@ verified in the Inspector and each workflow run end to end in an assistant, bran
 the real JDBC driver (2026-10-21).
 
 ## 2. Next build steps (agreed order)
+
+> **Order (owner, 2026-11-01): functionality first.** Next is **#5 (metadata admin screens)**; security (#4) moved
+> to "Before production deployment" at the end of this section. Numbers are kept so references stay valid.
 
 1. **Feature branch `feature-metamodel`: fact/dimension model** (created by the owner after the MCP merge,
    2026-10-24; prove-or-fail-fast, merge when confident). Steps, each passing the parity check before the next:
@@ -126,18 +173,18 @@ the real JDBC driver (2026-10-21).
      branch must pass `bash tools/parity/run.sh` with 0 differences.
 2. ~~**Y-axis Scale control**~~ **built 2026-10-31 as a per-chart setting on the dashboard edit page** (§1 item 2;
    SQL/021). A metric's own `fixed` scale stays a suggestion; only a chart's custom bounds are hard.
-3. **Read-only database login** for metric queries (SELECT on STAR tables only, statement timeout), as a
-   second database connection.
-4. **Authentication / sessions** (backlog #5):
-   - the server takes the enterprise from the session;
-   - users with a temporary password are blocked from everything except Change Password;
-   - users can't deactivate themselves;
-   - fold in **#3** (missing fields → 400 via `@ControllerAdvice`).
+3. ~~**Read-only database login** for metric queries~~ **built 2026-10-31** (§1 item 3; SQL/022). Client databases
+   (other connection methods) still need their own provider: credentials from the secrets store, TLS, the same
+   login checks.
 5. **Metadata admin screens** (owner, 2026-10-31: configuring Prism for a new database must be possible in the UI,
-   without knowing Prism's internal tables; metrics admins only, enterprise from the session, so after #4; they go
-   under a new **Metrics** menu, details to come from the owner):
+   without knowing Prism's internal tables; metrics admins only and enterprise from the session once #4 exists;
+   built now without those checks (owner, 2026-11-01: functionality first), role checks added with #4; they go
+   under a new **Metrics** menu, details to come from the owner). Also fold in backlog **#3** (missing request
+   fields → 400 via `@ControllerAdvice` instead of 500): a functional fix these screens need:
    - **Data sources:** add / edit a data source (connection method, host, database, the secret's name; never the
      credentials themselves), **Test connection**;
+   - after saving facts or dimensions of a `prism_database` source, call `prism.grant_star_tables_to_reader()`
+     (SQL/022) so the read-only metric login can read exactly the registered tables;
    - **Facts and dimensions:** pick tables from the data source (with #6 schema reading), set aliases, and the
      fact–dimension links (join columns, suggested from foreign keys);
    - **Focus areas and levels:** an area per dimension; levels as dimension columns with a **label** and a **key**
@@ -194,6 +241,20 @@ the real JDBC driver (2026-10-21).
    PrivateLink connections; per-cloud deployments (OVERVIEW §3.1); dashboard tabs and sharing (dashboards
    themselves: §1); save a dashboard's last focus level and filters; roles; enterprise-scoped metadata; super-user enterprise picker; integrations
    (e.g. Jira).
+
+### Before production deployment (security; owner, 2026-11-01)
+
+Prism runs only locally for now, so functional work comes first (next: #5). These must be done before any deployment
+outside the owner's machine:
+
+4. **Authentication / sessions** (backlog #5): server-side sessions (HttpOnly cookie), every `/api` endpoint behind
+   a session (except login), 401 → back to Login; roles (OVERVIEW's `User_Roles`: viewer, dashboard author, metrics
+   admin, enterprise admin) with role checks on the metadata admin screens (#5); and:
+   - the server takes the enterprise and the user from the session (not `enterprisePk` / `enterprise_pk` /
+     `X-User-ID` from the browser);
+   - users with a temporary password are blocked from everything except Change Password;
+   - users can't deactivate themselves;
+   - CSRF protection, session timeout, CORS tightened (backlog #6); the MCP endpoint behind the same sessions.
 
 ## 3. Smaller backlog items (see CLAUDE.md "Open issues")
 

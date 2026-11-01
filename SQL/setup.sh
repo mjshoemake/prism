@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Sets up a NEW Prism database: creates it (if missing) and runs every migration script in order, 001 star schema
-# … 012 metric types, plus any later NNN-*.sql. For a fresh database only: scripts 001–008 are not re-runnable, so it
-# stops if the "prism" schema already exists (run new migrations one by one instead, see REST/CLAUDE.md).
+# … 023 (which moves the demo STAR tables to schema demo_star), plus any later NNN-*.sql. For a fresh database only:
+# scripts 001–008 are not re-runnable, so it stops if the "prism" schema already exists (run new migrations one by
+# one instead, see REST/CLAUDE.md).
 #   bash SQL/setup.sh                    database "playpen" on localhost:5432 as postgres
 #   PRISM_DB=mydb bash SQL/setup.sh      another database name
 #   PRISM_PSQL_BASE="/path/to/psql -h host -p 5432 -U user" bash SQL/setup.sh
 #   PGPASSWORD                            as for any psql call
+#   PRISM_READER_PASSWORD=…               password for the read-only metric login prism_reader (SQL/022)
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 DB=${PRISM_DB:-playpen}
@@ -41,6 +43,18 @@ for script in "$here"/[0-9][0-9][0-9]-*.sql; do
   echo "run  $(basename "$script")"
   "${PSQL[@]}" -d "$DB" -q -v ON_ERROR_STOP=1 -f "$script" >/dev/null
 done
-echo "database $DB ready: $("${PSQL[@]}" -d "$DB" -Atc 'SELECT count(*) FROM prism."Sprint_Metrics_Fact"') demo fact rows,"\
+
+# Password of the read-only metric login (SQL/022), if given. printf is a shell builtin and the statement goes to psql
+# on stdin, so the password appears in no command line (ps) and no file. Single quotes are doubled for SQL.
+if [ -n "${PRISM_READER_PASSWORD:-}" ]; then
+  printf "ALTER ROLE prism_reader PASSWORD '%s';\n" "${PRISM_READER_PASSWORD//\'/\'\'}" |
+    "${PSQL[@]}" -d "$DB" -q -v ON_ERROR_STOP=1 >/dev/null
+  echo "prism_reader: password set"
+else
+  echo "note: PRISM_READER_PASSWORD wasn't set, so prism_reader's password wasn't changed. If it has none yet," >&2
+  echo "charts can't load until you set one:" >&2
+  echo "  ${PSQL[*]} -d $DB -c \"ALTER ROLE prism_reader PASSWORD '…'\"   and PRISM_READER_PASSWORD in REST/.env.local" >&2
+fi
+echo "database $DB ready: $("${PSQL[@]}" -d "$DB" -Atc 'SELECT count(*) FROM demo_star."Sprint_Metrics_Fact"') demo fact rows,"\
      "$("${PSQL[@]}" -d "$DB" -Atc 'SELECT count(*) FROM prism."Metrics"') metrics,"\
      "$("${PSQL[@]}" -d "$DB" -Atc 'SELECT count(*) FROM prism."DB_Scripts_Executed"') scripts recorded"

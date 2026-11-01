@@ -39,7 +39,7 @@ quarter → month → sprint. New metrics are added as **data, not code**: no ne
 
 ```
 REST/          Spring Boot API, React UI (REST/frontend), docs, parity check (REST/tools/parity)
-SQL/           numbered migration scripts (001 star schema … 012 metric types) and setup.sh
+SQL/           numbered migration scripts (001 … 023: Prism's schema "prism"; demo STAR tables in "demo_star") and setup.sh
 docs/          README images and the AI workflow record (docs/ai-workflow)
 ```
 
@@ -48,21 +48,29 @@ docs/          README images and the AI workflow record (docs/ai-workflow)
 Prerequisites: Java 21, Node 20+, PostgreSQL 16 (on a Mac, [Postgres.app](https://postgresapp.com) works).
 
 ```bash
-# 1. Database: creates "playpen" and runs every migration, including the demo data
-PGPASSWORD=<your postgres password> bash SQL/setup.sh
+# 1. Database: creates "playpen" and runs every migration, including the demo data and the read-only login
+#    "prism_reader" that chart queries run on (choose its password here)
+PGPASSWORD=<your postgres password> PRISM_READER_PASSWORD=<choose one> bash SQL/setup.sh
 
-# 2. Build (frontend, then the jar) and run
+# 2. Passwords for run.sh, kept out of git: REST/.env.local
+printf 'PGPASSWORD=<your postgres password>\nPRISM_READER_PASSWORD=<the one you chose>\n' > REST/.env.local
+
+# 3. Build (frontend, then the jar) and run
 cd REST
 ./build.sh
-PGPASSWORD=<your postgres password> ./run.sh          # http://localhost:8080
+./run.sh                                              # http://localhost:8080
 
-# 3. First user: the API creates it with a one-time temporary password (there is no default password)
+# 4. First user: the API creates it with a one-time temporary password (there is no default password)
 curl -s -X POST http://localhost:8080/api/users -H 'Content-Type: application/json' \
      -d '{"enterprise_pk": 1, "email": "you@example.com"}'
 ```
 
 Sign in at http://localhost:8080 with that email and the `temporaryPassword` from the response, then choose your
 own password.
+
+Charts run on the read-only login only: if it isn't set up, they show a message saying what to do instead of data
+(an existing database: run `SQL/022-metric_query_reader.sql` and `SQL/023-demo_star_schema.sql`, then
+`ALTER ROLE prism_reader PASSWORD '…';` and put the same password in `REST/.env.local` as `PRISM_READER_PASSWORD`).
 
 Optional:
 

@@ -122,7 +122,8 @@ were removed once the first baseline was frozen.
 
 ## Limitations
 
-- The fixture uses the demo schema's tables (`Sprint_Metrics_Fact`, `Sprint_Dim`, `Team_Dim`). The fact/dimension
+- The fixture uses the demo STAR tables (`Sprint_Metrics_Fact`, `Sprint_Dim`, `Team_Dim`), which live in schema
+  `demo_star` since SQL/023 (`fixture.sh` runs every migration, then loads `fixture-data.sql` there). The fact/dimension
   model must keep working on it, or the fixture moves with it.
 - Text ordering depends on collation, so a baseline frozen on one machine may not match another database.
   Fixture labels were chosen to sort the same in `C` and `en_US`.

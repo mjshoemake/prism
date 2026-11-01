@@ -18,9 +18,9 @@ class MetricQueryBuilderTests {
     private static final int OTHER_DIM = 9;
 
     /** The demo schema, as SQL/013 seeds it. */
-    static final FactDefinition DEMO_FACT = new FactDefinition(1, 1, new TableDefinition("prism", "Sprint_Metrics_Fact", "smf"),
-            List.of(new FactDefinition.Join(SPRINT_DIM, new TableDefinition("prism", "Sprint_Dim", "sd"), "sprint_pk", "sprint_pk"),
-                    new FactDefinition.Join(TEAM_DIM, new TableDefinition("prism", "Team_Dim", "td"), "team_pk", "team_pk")));
+    static final FactDefinition DEMO_FACT = new FactDefinition(1, 1, new TableDefinition("demo_star", "Sprint_Metrics_Fact", "smf"),
+            List.of(new FactDefinition.Join(SPRINT_DIM, new TableDefinition("demo_star", "Sprint_Dim", "sd"), "sprint_pk", "sprint_pk"),
+                    new FactDefinition.Join(TEAM_DIM, new TableDefinition("demo_star", "Team_Dim", "td"), "team_pk", "team_pk")));
 
     private static final FocusLevelDefinition YEAR = new FocusLevelDefinition(1, 1, SPRINT_DIM, "Year", "sprint_year");
     private static final FocusLevelDefinition TEAM = new FocusLevelDefinition(12, 2, TEAM_DIM, "Team", "team_name");
@@ -78,16 +78,16 @@ class MetricQueryBuilderTests {
         var query = MetricQueryBuilder.build(metric(MetricType.SUM, "smf.a", null, null), TEAM,
                 List.of(new MetricQueryBuilder.ResolvedFilter(YEAR, "2024")));
         assertTrue(query.sql().contains("""
-                FROM "prism"."Sprint_Metrics_Fact" smf
-                JOIN "prism"."Sprint_Dim" sd ON smf.sprint_pk = sd.sprint_pk
-                JOIN "prism"."Team_Dim" td ON smf.team_pk = td.team_pk
+                FROM "demo_star"."Sprint_Metrics_Fact" smf
+                JOIN "demo_star"."Sprint_Dim" sd ON smf.sprint_pk = sd.sprint_pk
+                JOIN "demo_star"."Team_Dim" td ON smf.team_pk = td.team_pk
                 WHERE"""), query.sql());
     }
 
     @Test
     void onlyNeededDimensionsAreJoined() {
         var query = MetricQueryBuilder.build(metric(MetricType.SUM, "smf.a", null, null), YEAR, List.of());
-        assertTrue(query.sql().contains("FROM \"prism\".\"Sprint_Metrics_Fact\" smf\nJOIN \"prism\".\"Sprint_Dim\" sd ON smf.sprint_pk = sd.sprint_pk\nGROUP BY"),
+        assertTrue(query.sql().contains("FROM \"demo_star\".\"Sprint_Metrics_Fact\" smf\nJOIN \"demo_star\".\"Sprint_Dim\" sd ON smf.sprint_pk = sd.sprint_pk\nGROUP BY"),
                 query.sql());
         assertFalse(query.sql().contains("Team_Dim"), query.sql());
         assertFalse(query.sql().contains("WHERE"), query.sql());
@@ -98,7 +98,7 @@ class MetricQueryBuilderTests {
     void dimensionAliasesInTheMetricAreJoined() {
         var withTeam = metric(MetricType.PERCENTAGE, "smf.a", "smf.b", "td.level_1_name IS NOT NULL");
         var query = MetricQueryBuilder.build(withTeam, YEAR, List.of());
-        assertTrue(query.sql().contains("JOIN \"prism\".\"Team_Dim\" td ON smf.team_pk = td.team_pk"), query.sql());
+        assertTrue(query.sql().contains("JOIN \"demo_star\".\"Team_Dim\" td ON smf.team_pk = td.team_pk"), query.sql());
         assertEquals(Set.of(TEAM_DIM), MetricQueryBuilder.dimensionsUsedBy(withTeam, DEMO_FACT));
         // Not an alias: a quoted name, part of a longer name, or a number.
         assertEquals(Set.of(), MetricQueryBuilder.dimensionsUsedBy(
@@ -160,11 +160,11 @@ class MetricQueryBuilderTests {
 
     @Test
     void tableAndJoinNamesAreChecked() {
-        assertThrows(IllegalArgumentException.class, () -> new TableDefinition("prism", "Bad\" x", "b"));
-        assertThrows(IllegalArgumentException.class, () -> new TableDefinition("prism", "T", "Upper"));
-        assertThrows(IllegalArgumentException.class, () -> new TableDefinition("prism", "T", "a; drop"));
+        assertThrows(IllegalArgumentException.class, () -> new TableDefinition("demo_star", "Bad\" x", "b"));
+        assertThrows(IllegalArgumentException.class, () -> new TableDefinition("demo_star", "T", "Upper"));
+        assertThrows(IllegalArgumentException.class, () -> new TableDefinition("demo_star", "T", "a; drop"));
         assertThrows(IllegalArgumentException.class, () -> new TableDefinition("", "T", "t"));
-        assertEquals("\"prism\".\"Sprint_Dim\" sd", new TableDefinition("prism", "Sprint_Dim", "sd").sqlReference());
+        assertEquals("\"demo_star\".\"Sprint_Dim\" sd", new TableDefinition("demo_star", "Sprint_Dim", "sd").sqlReference());
         assertThrows(IllegalArgumentException.class,
                 () -> new FactDefinition.Join(1, new TableDefinition("p", "D", "d"), "a b", "a"));
     }

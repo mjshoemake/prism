@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the hand-checked parity database from scratch: every migration in prism/SQL except the demo data
-# (002–004), then fixture-data.sql. Re-run any time; it drops and recreates only the fixture database.
+# (002–004), then fixture-data.sql (into "demo_star", where SQL/023 moved the STAR tables). Re-run any time; it drops and recreates only the fixture database.
 #   PRISM_PSQL_BASE  psql command without -d (default: psql -h localhost -p 5432 -U postgres)
 #   FIXTURE_DB       database name (default: prism_fixture; must contain "fixture")
 #   PGPASSWORD       as for any psql call
@@ -34,4 +34,4 @@ for script in "$sql_dir"/[0-9][0-9][0-9]-*.sql; do
   run -f "$script"
 done
 run -f "$here/fixture-data.sql"
-echo "fixture database '$DB' ready: $("${PSQL_BASE[@]}" -d "$DB" -Atc 'SELECT count(*) FROM "prism"."Sprint_Metrics_Fact"') fact rows"
+echo "fixture database '$DB' ready: $("${PSQL_BASE[@]}" -d "$DB" -Atc 'SELECT count(*) FROM "demo_star"."Sprint_Metrics_Fact"') fact rows"

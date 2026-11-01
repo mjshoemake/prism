@@ -33,7 +33,7 @@ class MetricDraftServiceTests {
         assertTrue(result.previewSql().contains("SUM(smf.failed_deployments)"), result.previewSql());
         assertTrue(result.previewSql().contains("GROUP BY sd.year_month"), result.previewSql());
         assertTrue(result.previewSql().contains("td.team_name = ?"), result.previewSql());
-        assertTrue(result.previewSql().contains("FROM \"prism\".\"Sprint_Metrics_Fact\" smf\n"), result.previewSql());
+        assertTrue(result.previewSql().contains("FROM \"demo_star\".\"Sprint_Metrics_Fact\" smf\n"), result.previewSql());
         assertTrue(result.calculation().startsWith("SUM(numerator) / SUM(denominator)"));
     }
 

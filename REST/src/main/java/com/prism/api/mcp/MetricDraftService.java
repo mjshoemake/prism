@@ -42,11 +42,16 @@ public class MetricDraftService {
             "average", "mean");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
-    /** Example fact for the SQL preview: the demo schema (fact smf, dimensions sd and td), as seeded by SQL/013. */
+    /**
+     * Example fact for the SQL preview: the demo STAR schema (fact smf, dimensions sd and td), as seeded by SQL/013 and
+     * moved to schema demo_star by SQL/023.
+     */
     private static final FactDefinition PREVIEW_FACT = new FactDefinition(0, 0,
-            new TableDefinition("prism", "Sprint_Metrics_Fact", "smf"),
-            List.of(new FactDefinition.Join(1, new TableDefinition("prism", "Sprint_Dim", "sd"), "sprint_pk", "sprint_pk"),
-                    new FactDefinition.Join(2, new TableDefinition("prism", "Team_Dim", "td"), "team_pk", "team_pk")));
+            new TableDefinition("demo_star", "Sprint_Metrics_Fact", "smf"),
+            List.of(new FactDefinition.Join(1, new TableDefinition("demo_star", "Sprint_Dim", "sd"),
+                            "sprint_pk", "sprint_pk"),
+                    new FactDefinition.Join(2, new TableDefinition("demo_star", "Team_Dim", "td"),
+                            "team_pk", "team_pk")));
 
     /** Example level and filter for the SQL preview (demo schema columns). */
     private static final FocusLevelDefinition PREVIEW_GROUP = new FocusLevelDefinition(0, 0, 1, "Year & Month", "year_month");

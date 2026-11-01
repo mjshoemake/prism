@@ -129,6 +129,13 @@ Prism has two kinds of tables.
 Fact and dimension tables in a **STAR schema**. The implementor may name tables and columns anything
 (within Postgres rules) — the metadata tells Prism how to use them.
 
+**No dependencies between Prism and STAR tables (owner, 2026-11-01).** Only fact and dimension tables are the STAR
+schema; every metadata table is Prism's. Because a client's STAR schema lives outside Prism, the two never depend on
+each other: no foreign keys, views, triggers or functions across them, and Prism's migrations never create, change or
+load STAR tables. Prism knows a STAR table only by the schema, table and column names in its metadata. Even the demo
+STAR tables live in their own schema, `demo_star` (SQL/023), read by their own login (`prism_reader`), which has no
+access to Prism's schema at all; Prism's login works in `prism`.
+
 **Target (agreed Oct 2026): client STAR data never lives in the Prism database.** Each client hosts its
 own STAR schema (e.g. in its own cloud account), and Prism reaches it as a *data source* (§4.3). The only
 STAR schema allowed inside the Prism database is the demo/prototype one, and even that is registered as an
@@ -417,7 +424,17 @@ metric's data source (`Data_Sources` connection method). The request it gets is 
 filters), so a client-run API can implement the same seam later. Today the only provider is `prism_database` (the
 demo schema, on Prism's own connection); a data source with another method is refused with a clear message.
 
-**Still to come:** a provider for client databases with a read-only login and a time limit (roadmap #3); metric expressions are checked only for `;` and comments until the
+**Read-only login (roadmap #3, SQL/022, Oct 2026):** chart queries no longer run on Prism's own login. They run on
+`prism_reader`, through a second connection pool: it can SELECT only the STAR tables registered in `Facts` /
+`Dimensions`, which since SQL/023 live in their own schema `demo_star`, and has no privilege at all in Prism's schema
+`prism` (it can't even see that `Users` or `Metrics` exist), its transactions are read-only, and it has a 30-second
+statement limit on the login plus the same limit on the Java side. The server checks the login before its first query
+and refuses chart queries (503, with the reason) if it can't connect, is Prism's own login, isn't read-only, or can use
+Prism's schema or read any table in it; it never falls back to Prism's login. Every query is audited (`METRIC_QUERY`: data source, metric,
+level, number of filters, rows, time, outcome; no filter values). After registering new STAR tables,
+`prism.grant_star_tables_to_reader()` re-grants exactly the registered set (the admin screens will call it).
+
+**Still to come:** a provider for client databases (credentials from the secrets store, TLS, the same checks); metric expressions are checked only for `;` and comments until the
 allow-list parser exists.
 
 ## 6. Security model
@@ -428,7 +445,7 @@ allow-list parser exists.
 | API access | **Not authenticated.** Any caller can use every endpoint; the UI just hides pages when signed out. | Every request authenticated; enterprise and roles derived from the session. |
 | Authorization | None. | Roles (e.g. viewer, dashboard author, metrics admin, enterprise admin). |
 | Tenant isolation | User administration is scoped to the signed-in user's enterprise **in the UI only** (the API trusts the enterprise sent by the browser). | All metadata and data queries scoped to the user's enterprise by the server. Super-users can switch enterprise with a picker; lists never mix enterprises. |
-| Metric queries | Client sends only IDs and values; the server builds all the SQL, FROM/JOIN included, from cached metadata (`Metrics`, `Facts`, `Dimensions`, `Focus_Levels`) and binds filter values (SQL/012, SQL/016). Runs on the Prism database's connection; metric expressions only guarded against `;` and comments. | Client sends only IDs and values (metric, focus level, filters with an `operator`, initially "equals" only). The server builds all SQL from cached metadata (refreshed every 15 minutes; unknown IDs rejected), binds values as parameters, and runs it on the data source's read-only login with a time limit (§4.3). Metric calculations are parsed and checked against an allow-list. |
+| Metric queries | Client sends only IDs and values; the server builds all the SQL, FROM/JOIN included, from cached metadata (`Metrics`, `Facts`, `Dimensions`, `Focus_Levels`) and binds filter values (SQL/012, SQL/016). Runs on the read-only `prism_reader` login with a time limit, checked before use, never Prism's own login (SQL/022); every query audited. Metric expressions only guarded against `;` and comments. | Client sends only IDs and values (metric, focus level, filters with an `operator`, initially "equals" only). The server builds all SQL from cached metadata (refreshed every 15 minutes; unknown IDs rejected), binds values as parameters, and runs it on the data source's read-only login with a time limit (§4.3). Metric calculations are parsed and checked against an allow-list. |
 | Client data sources | Demo data in the Prism database. | No client STAR data in the Prism database; read-only, TLS, allow-listed or private-link connections; credentials in a secrets store (§4.3). |
 | Secrets | `Enterprises.auth_token` stored as plain text; DB credentials in `application.properties`. | In the deployment's secrets store (per cloud provider, §3.1); never returned by the API. |
 | Auditing | Logins, user changes and password changes written to `logs/audit.log`. | Same, plus the acting user once authentication exists. |
@@ -448,7 +465,9 @@ The UI's own security rules are covered in the [UI developer guide](../frontend/
 | Y-axis scale per chart (metric default / 0–100 / fit / custom) with barber-pole outliers | **Working** (SQL/021; set on the dashboard's edit page) |
 | Drill-down pointers (`drill_to_focus_level_pk`), several paths per area | **Working** (SQL/015, step 1d): the UI drills by the pointer; a level without one only adds the filter |
 | Label vs key columns per focus level | **Working** (SQL/015, SQL/018, step 1e): charts group, sort and filter by the key and show the label (e.g. "Sprint 26" with key 2024-12-23) |
-| Data sources / fact & dimension model, exclusions, enterprise scoping | **In progress:** `Data_Sources`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc` created and seeded with the demo schema (SQL/013), not yet used by the query builder; exclusions and enterprise scoping planned |
+| Data sources / fact & dimension model, exclusions, enterprise scoping | **In progress:** `Data_Sources`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc` (SQL/013) drive the query builder's FROM/JOIN and the data provider (steps 1c–1d); exclusions and enterprise scoping planned |
+| Read-only login for metric queries (SELECT on the STAR tables only, read-only, time limit, audited) | **Working** (SQL/022, roadmap #3) |
+| Demo STAR tables in their own schema `demo_star`; no dependencies between Prism's and STAR tables; each login confined to its schema | **Working** (SQL/023) |
 | Saved dashboards: 1, 2 (stacked) or 4 (quadrants) charts, a metric per chart, dashboard-wide drill-down; Analysis page, Dashboards list, edit page | **Working** (SQL/020–021; owner from the browser until sessions, #4) |
 | Dashboard tabs, sharing dashboards | Planned |
 | Server-side sessions, roles, tenant isolation | Planned |

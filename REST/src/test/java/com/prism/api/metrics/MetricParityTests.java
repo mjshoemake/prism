@@ -308,7 +308,9 @@ class MetricParityTests {
             this.jdbc = new JdbcTemplate(dataSource);
             this.cache = new MetricsMetadataCache(jdbc, Duration.ofHours(1));
             this.service = new SprintMetricsService(jdbc, cache,
-                    new MetricDataProviders(List.of(new PrismDatabaseDataProvider(jdbc))));
+                    // Prism's own login on purpose: parity compares calculations, not permissions (the live API runs
+                    // them as prism_reader, SQL/022–023).
+                    new MetricDataProviders(List.of(new PrismDatabaseDataProvider(MetricQueryConnection.unchecked(jdbc)))));
         }
 
         /** Focus levels in display order (area sort_order, then level sort_order). Names must be unique. */

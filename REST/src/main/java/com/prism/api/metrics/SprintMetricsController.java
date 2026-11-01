@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,7 +39,8 @@ public class SprintMetricsController {
     /**
      * Chart rows {@code [{key, label, value}, ...]} in key order; send a row's {@code key} back as a filter value. The body holds only IDs and values ({@link ChartDataRequest}); the
      * server builds the SQL from metadata. 400 {success:false, message} for an unknown metric or focus level, an
-     * unsupported operator, or too many filters.
+     * unsupported operator, or too many filters; 503 {success:false, message} when the read-only metric login isn't
+     * usable or the query ran past its time limit (SQL/022).
      */
     @PostMapping("/data")
     public ResponseEntity<Object> getChartData(@RequestBody ChartDataRequest request) {
@@ -48,6 +50,10 @@ public class SprintMetricsController {
                 return ResponseEntity.ok(svc.fetchChartData(request));
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+            } catch (MetricDataUnavailableException e) {
+                // The read-only metric login isn't usable or the query timed out (SQL/022): the server's problem.
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("success", false, "message", e.getMessage()));
             }
         });
     }
