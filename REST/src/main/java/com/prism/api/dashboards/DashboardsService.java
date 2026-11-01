@@ -1,5 +1,6 @@
 package com.prism.api.dashboards;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -17,8 +18,8 @@ import com.prism.api.metrics.MetricsMetadataCache;
 import com.prism.common.logging.LogCategory;
 
 /**
- * Users' saved dashboards ("prism"."Dashboards" + "Dashboard_Charts", SQL/020). Every operation is limited to the
- * dashboards of the given user.
+ * Users' saved dashboards ("prism"."Dashboards" + "Dashboard_Charts", SQL/020; each chart's y-axis scale, SQL/021).
+ * Every operation is limited to the dashboards of the given user.
  * TODO (roadmap #4): the user comes from the X-User-ID header until real sessions exist.
  */
 @Service
@@ -30,13 +31,15 @@ public class DashboardsService {
     public static final Set<Integer> LAYOUTS = Set.of(1, 2, 4);
     public static final int MAX_POSITION = 4;
     public static final int MAX_NAME = 60;
+    /** Exclusive limit of a y-axis bound (Dashboard_Charts.y_axis_min/max are NUMERIC(14,4)). */
+    public static final BigDecimal MAX_BOUND = new BigDecimal("10000000000");
 
     private static final String ACTIVE_USER_SQL = """
             SELECT 1 FROM "prism"."Users" WHERE user_id = ? AND is_active
             """;
 
     private static final String LIST_SQL = """
-            SELECT d.dashboard_pk, d.name, d.layout, c.position, c.metric_pk
+            SELECT d.dashboard_pk, d.name, d.layout, c.position, c.metric_pk, c.y_axis_mode, c.y_axis_min, c.y_axis_max
             FROM "prism"."Dashboards" d
             LEFT JOIN "prism"."Dashboard_Charts" c ON c.dashboard_pk = d.dashboard_pk
             WHERE d.user_id = ?
@@ -65,7 +68,8 @@ public class DashboardsService {
             """;
 
     private static final String INSERT_CHART_SQL = """
-            INSERT INTO "prism"."Dashboard_Charts" (dashboard_pk, position, metric_pk) VALUES (?, ?, ?)
+            INSERT INTO "prism"."Dashboard_Charts" (dashboard_pk, position, metric_pk, y_axis_mode, y_axis_min, y_axis_max)
+            VALUES (?, ?, ?, ?, ?, ?)
             """;
 
     private static final String DELETE_SQL = """
@@ -99,7 +103,8 @@ public class DashboardsService {
                     ((Number) row.get("layout")).intValue(), new ArrayList<>()));
             if (row.get("position") != null) {
                 dashboard.charts().add(new Dashboard.ChartArea(((Number) row.get("position")).intValue(),
-                        ((Number) row.get("metric_pk")).intValue()));
+                        ((Number) row.get("metric_pk")).intValue(), (String) row.get("y_axis_mode"),
+                        decimal(row.get("y_axis_min")), decimal(row.get("y_axis_max"))));
             }
         }
         return byPk.values().stream()
@@ -194,10 +199,60 @@ public class DashboardsService {
             if (!positions.add(chart.position())) {
                 throw new IllegalArgumentException("Chart position " + chart.position() + " is given twice.");
             }
-            charts.add(chart);
+            charts.add(validScale(chart));
         }
         charts.sort((a, b) -> Integer.compare(a.position(), b.position()));
         return new Dashboard(0, name, request.layout(), List.copyOf(charts));
+    }
+
+    /**
+     * The area with a valid y-axis scale (SQL/021): a missing mode means the metric's own; custom needs a minimum
+     * and/or a maximum, with minimum &lt; maximum when both are given; other modes have no bounds, so any sent with them
+     * are dropped (a form may keep them while the user switches modes).
+     */
+    static Dashboard.ChartArea validScale(Dashboard.ChartArea chart) {
+        log.debug("Started");
+        var mode = chart.yAxisMode() == null || chart.yAxisMode().isBlank()
+                ? Dashboard.YAxisMode.METRIC : chart.yAxisMode().strip();
+        if (!Dashboard.YAxisMode.ALL.contains(mode)) {
+            throw new IllegalArgumentException("Chart " + chart.position() + ": unknown y-axis scale '" + mode
+                    + "' (use metric, zero_100, fit or custom).");
+        }
+        if (!Dashboard.YAxisMode.CUSTOM.equals(mode)) {
+            return new Dashboard.ChartArea(chart.position(), chart.metricPk(), mode, null, null);
+        }
+        var min = chart.yAxisMin();
+        var max = chart.yAxisMax();
+        if (min == null && max == null) {
+            throw new IllegalArgumentException("Chart " + chart.position()
+                    + ": a custom scale needs a minimum, a maximum or both.");
+        }
+        requireInRange(chart.position(), min);
+        requireInRange(chart.position(), max);
+        if (min != null && max != null && min.compareTo(max) >= 0) {
+            throw new IllegalArgumentException("Chart " + chart.position()
+                    + ": the y-axis minimum must be less than the maximum.");
+        }
+        return new Dashboard.ChartArea(chart.position(), chart.metricPk(), mode, min, max);
+    }
+
+    /** NUMERIC(14,4) holds up to 10 digits before the point. */
+    private static void requireInRange(int position, BigDecimal bound) {
+        log.debug("Started");
+        if (bound != null && bound.abs().compareTo(MAX_BOUND) >= 0) {
+            throw new IllegalArgumentException("Chart " + position + ": y-axis bounds must be between -"
+                    + MAX_BOUND.toPlainString() + " and " + MAX_BOUND.toPlainString() + ".");
+        }
+    }
+
+    /** A NUMERIC(14,4) bound without trailing zeros, never in exponent form: 60.0000 → 60, 150.5000 → 150.5. */
+    static BigDecimal decimal(Object value) {
+        log.debug("Started");
+        if (value == null) {
+            return null;
+        }
+        var stripped = new BigDecimal(value.toString()).stripTrailingZeros();
+        return stripped.scale() < 0 ? stripped.setScale(0) : stripped;
     }
 
     private void requireActiveUser(UUID userId) {
@@ -226,7 +281,8 @@ public class DashboardsService {
     private void insertCharts(int dashboardPk, List<Dashboard.ChartArea> charts) {
         log.debug("Started");
         for (var chart : charts) {
-            jdbcTemplate.update(INSERT_CHART_SQL, dashboardPk, chart.position(), chart.metricPk());
+            jdbcTemplate.update(INSERT_CHART_SQL, dashboardPk, chart.position(), chart.metricPk(), chart.yAxisMode(),
+                    chart.yAxisMin(), chart.yAxisMax());
         }
     }
 }

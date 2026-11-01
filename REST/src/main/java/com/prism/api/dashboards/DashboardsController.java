@@ -23,7 +23,7 @@ import com.prism.common.logging.LogCategory;
 import com.prism.common.logging.PerformanceLog;
 
 /**
- * /api/dashboards: the signed-in user's saved dashboards (SQL/020). Errors are {success:false, message}: 400 for an
+ * /api/dashboards: the signed-in user's saved dashboards (SQL/020, chart scales SQL/021). Errors are {success:false, message}: 400 for an
  * invalid request or user, 404 for a dashboard the user doesn't have, 409 for a name already in use.
  * TODO (roadmap #4): the user comes from the X-User-ID header (as /api/auth/change-password) until real sessions exist.
  */
@@ -39,7 +39,10 @@ public class DashboardsController {
         this.svc = svc;
     }
 
-    /** The user's dashboards, by name: {@code [{dashboard_pk, name, layout, charts:[{position, metric_pk}]}]}. */
+    /**
+     * The user's dashboards, by name:
+     * {@code [{dashboard_pk, name, layout, charts:[{position, metric_pk, y_axis_mode, y_axis_min, y_axis_max}]}]}.
+     */
     @GetMapping
     public ResponseEntity<Object> list(@RequestHeader("X-User-ID") String userId) {
         log.debug("Started");
@@ -47,6 +50,16 @@ public class DashboardsController {
             List<Dashboard> dashboards = svc.list(userId(userId));
             return ResponseEntity.ok(dashboards);
         }));
+    }
+
+    /** One of the user's dashboards (the edit page); 404 if it doesn't exist or belongs to someone else. */
+    @GetMapping("/{dashboardPk}")
+    public ResponseEntity<Object> get(@RequestHeader("X-User-ID") String userId,
+                                      @PathVariable("dashboardPk") int dashboardPk) {
+        log.debug("Started");
+        return PerformanceLog.time("DashboardsController.get", () -> handle(() -> svc.get(userId(userId), dashboardPk)
+                .<ResponseEntity<Object>>map(ResponseEntity::ok)
+                .orElseGet(() -> error(HttpStatus.NOT_FOUND, "Dashboard not found."))));
     }
 
     /** Creates a dashboard: body {name, layout, charts}; 200 with the saved dashboard. */

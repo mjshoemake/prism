@@ -3,10 +3,11 @@ import { AuthProvider } from './auth/AuthProvider';
 import { RequireAuth } from './auth/RequireAuth';
 import { AppLayout } from './components/layout/AppLayout';
 import { ToastProvider } from './components/toast/ToastProvider';
+import { AnalysisPage } from './features/analysis/AnalysisPage';
 import { ChangePasswordPage } from './features/auth/ChangePasswordPage';
 import { LoginPage } from './features/auth/LoginPage';
-import { DashboardsPage } from './features/dashboards/DashboardsPage';
-import { MetricsPage } from './features/metrics/MetricsPage';
+import { DashboardEditPage } from './features/dashboards/DashboardEditPage';
+import { DashboardListPage } from './features/dashboards/DashboardListPage';
 import { SystemSettingsPage } from './features/settings/SystemSettingsPage';
 import { UsersPage } from './features/users/UsersPage';
 
@@ -23,13 +24,17 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/login" element={<LoginPage />} />
               <Route element={<RequireAuth />}>
-                <Route path="/metrics" element={<MetricsPage />} />
-                <Route path="/dashboards" element={<DashboardsPage />} />
+                <Route path="/analysis" element={<AnalysisPage />} />
+                <Route path="/dashboards" element={<DashboardListPage />} />
+                <Route path="/dashboards/new" element={<DashboardEditPage key="new" />} />
+                <Route path="/dashboards/:dashboardPk/edit" element={<DashboardEditPage />} />
                 <Route path="/users" element={<UsersPage />} />
                 <Route path="/settings" element={<SystemSettingsPage />} />
                 <Route path="/change-password" element={<ChangePasswordPage />} />
               </Route>
-              <Route path="*" element={<Navigate to="/metrics" replace />} />
+              {/* The Metrics page became Analysis (2026-10-31); old links still work. */}
+              <Route path="/metrics" element={<Navigate to="/analysis" replace />} />
+              <Route path="*" element={<Navigate to="/analysis" replace />} />
             </Route>
           </Routes>
         </HashRouter>

@@ -9,6 +9,12 @@ export const dashboardsApi = {
   list: (userId: string, signal?: AbortSignal) =>
     api.get<Dashboard[]>('/api/dashboards', { headers: { 'X-User-ID': userId }, signal }),
 
+  get: (userId: string, dashboardPk: number, signal?: AbortSignal) =>
+    api.get<Dashboard>(`/api/dashboards/${encodeURIComponent(dashboardPk)}`, {
+      headers: { 'X-User-ID': userId },
+      signal,
+    }),
+
   create: (userId: string, dashboard: DashboardRequest) =>
     api.post<Dashboard>('/api/dashboards', dashboard, { headers: { 'X-User-ID': userId } }),
 

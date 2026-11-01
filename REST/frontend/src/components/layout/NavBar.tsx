@@ -8,13 +8,13 @@ export function NavBar() {
 
   const handleLogout = () => {
     signOut();
-    navigate('/metrics');
+    navigate('/analysis');
   };
 
   return (
     <nav className="navbar navbar-expand-lg navbar-dark">
       <div className="container-fluid">
-        <Link className="navbar-brand fs-4" to="/metrics">
+        <Link className="navbar-brand fs-4" to="/analysis">
           <i className="fas fa-chart-bar me-2" />
           Prism
         </Link>
@@ -34,8 +34,8 @@ export function NavBar() {
           <ul className="navbar-nav me-auto mb-2 mb-lg-0">
             <NavDropdown title="Dashboard">
               <li>
-                <Link className="dropdown-item" to="/metrics">
-                  Metrics
+                <Link className="dropdown-item" to="/analysis">
+                  Analysis
                 </Link>
               </li>
               <li>

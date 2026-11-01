@@ -21,7 +21,7 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 export function UsersTable({ users, currentUserId, sort, onSort, onSelect }: UsersTableProps) {
   return (
     <div className="table-responsive">
-      <table className="table table-dark table-hover align-middle mb-0 users-table">
+      <table className="table table-dark table-striped table-hover align-middle mb-0 list-table users-table">
         <thead>
           <tr>
             {COLUMNS.map(({ key, label }) => {

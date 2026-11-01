@@ -31,7 +31,7 @@ A single-page app for exploring Prism metrics with drill-down, plus login and us
 |---|---|
 | Framework | React 19 + TypeScript (strict) |
 | Build tool | Vite |
-| Routing | React Router 7, **hash routes** (`/#/metrics`) |
+| Routing | React Router 7, **hash routes** (`/#/analysis`) |
 | Styling | Bootstrap 5 + the purple/black theme |
 | Charts | Chart.js via `react-chartjs-2` |
 | Backend | Prism REST API (Spring Boot) under `/api` |
@@ -57,7 +57,7 @@ To build the full application (UI + API jar) from `REST/`: `./build.sh`, then `.
 | `src/App.tsx` | Every page and how it is protected — the whole app on one screen. |
 | `src/api/client.ts` | How all HTTP calls are made and how errors look. |
 | `src/features/metrics/useMetricsExplorer.ts` | The drill-down logic — the heart of Prism. |
-| `src/features/metrics/MetricsPage.tsx` | How a page is assembled from a hook and components. |
+| `src/features/analysis/AnalysisPage.tsx` | How a page is assembled from hooks and components (a saved dashboard, its charts, shared drill-down). |
 | `src/auth/AuthProvider.tsx` | What "signed in" means in the UI. |
 
 ---
@@ -151,10 +151,10 @@ sequenceDiagram
 Errors: `client.ts` throws an `ApiError` (status + body) for any non-2xx response. Hooks catch it and
 either set an `error` string (shown with `<ErrorAlert>`) or show a warning toast.
 
-### 2.5 Worked example: one bar click on the metrics page
+### 2.5 Worked example: one bar click on the Analysis page
 
-This is Prism's core interaction. Files involved: `MetricBarChart.tsx` → `ChartPanel.tsx` →
-`MetricsPage.tsx` → `useMetricsExplorer.ts` → `metricsApi.ts`.
+This is Prism's core interaction. Files involved: `MetricBarChart.tsx` → `DashboardChartCard.tsx` →
+`AnalysisPage.tsx` → `useMetricsExplorer.ts` → `metricsApi.ts`.
 
 1. The user clicks the bar **"Sarah Williams"** while the focus level is **Director**.
 2. `MetricBarChart`'s Chart.js `onClick` finds the bar's label and calls `onBarClick("Sarah Williams")`.
@@ -171,15 +171,16 @@ This is Prism's core interaction. Files involved: `MetricBarChart.tsx` → `Char
    `metricsApi.getChartData(...)` posts `{ metric_pk, focus_level_pk, filters }` — IDs and values only.
    The server looks up the metric's calculation and the levels' columns in its metadata and binds
    "Sarah Williams" as a query parameter.
-5. Rows arrive → `rows` state updates → the chart re-renders grouped by the new level. Any previous,
-   still-running request was cancelled by the effect's `AbortController`.
+5. Rows arrive → each chart's state updates → every chart on the dashboard re-renders grouped by the new
+   level (one request per visible chart). Any previous, still-running request was cancelled by the effect's
+   `AbortController`.
 
 Changing the focus area keeps the active filters: that is how a user "rotates" the same selection
 (e.g. Sarah's org) onto another dimension (e.g. Time).
 
-> **Target design:** this state will move up from the page to the **dashboard tab**, so one click
-> re-queries up to four charts at once. Keep that in mind: chart components should stay "dumb"
-> (rows + callbacks in, nothing else), which they are today.
+The drill-down state belongs to the page, not to a chart: one click re-queries up to four charts at once
+(SQL/020). Chart components stay "dumb" (rows, scale and callbacks in, nothing else). When dashboard tabs come,
+the state moves to the tab.
 
 ---
 
@@ -216,7 +217,9 @@ frontend/
     │   ├── ErrorAlert.tsx
     │   └── LoadingSpinner.tsx
     ├── features/               ── one folder per screen/domain
-    │   ├── metrics/            MetricsPage, useMetricsExplorer, useMetricList, metricFormat, filters, components/
+    │   ├── analysis/           AnalysisPage (a saved dashboard's charts), lastDashboard, components/AnalysisSidebar
+    │   ├── dashboards/         DashboardListPage, DashboardEditPage, useDashboards, layouts, components/DashboardChartCard
+    │   ├── metrics/            useMetricsExplorer, useMetricList, metricFormat (scales), filters, components/
     │   ├── users/              UsersPage, useUsers, userList (filter/sort), temporaryPassword, format,
     │   │                       components/ (UsersTable, UserRow, AddUserModal, EditUserModal, TemporaryPasswordNotice)
     │   ├── settings/           SystemSettingsPage (Admin → System Settings), useSystemSettings, validHours
@@ -377,7 +380,7 @@ Put it **inside** the `RequireAuth` route unless the page must be reachable whil
 
 ```tsx
 <Route element={<RequireAuth />}>
-  <Route path="/metrics" element={<MetricsPage />} />
+  <Route path="/analysis" element={<AnalysisPage />} />
   <Route path="/users" element={<UsersPage />} />
   <Route path="/teams" element={<TeamsPage />} />          {/* new */}
   <Route path="/change-password" element={<ChangePasswordPage />} />
@@ -438,7 +441,7 @@ empty state; normal state.
 
 **Not a UI task.** The UI holds no metric-specific information: metrics are rows in the `Metrics` table
 (type, columns, title, unit, decimals, scale — see the [API guide](../../CLAUDE.md)), listed by
-`GET /api/metrics/list` and charted generically. A new row appears in the Metric picker within
+`GET /api/metrics/list` and charted generically. A new row appears in the Edit page's metric lists within
 15 minutes (the server's metadata cache) or after a restart. Never add metric names, formulas or
 display rules to `src/`.
 
@@ -495,6 +498,7 @@ from the feature hook. Endpoints that answer failures with a JSON body (like the
 | Chart colours | `src/theme/palette.ts` — Chart.js draws on a canvas and can't read CSS variables; keep it in sync with the CSS |
 | Page layout (sidebar width, chart height, toast position) | `src/styles/layout.css` |
 | A single component's look | Prefer Bootstrap utility classes (`mb-3`, `d-flex`, `text-muted`) in the JSX |
+| Page title bars and list rows | `page-card` on every page's card (purple title bar; dialogs get the same bar automatically) and, on list pages, `table table-dark table-striped table-hover … list-table` on the table (alternating muted-purple rows); both in `layout.css` |
 
 **Buttons:** use only the variants the theme styles — `btn-primary` (main action: Save, Add, confirm),
 `btn-secondary` / `btn-outline-secondary` (Cancel and secondary actions) and `btn-outline-primary`.
@@ -602,7 +606,8 @@ folders.
 | Focus level | A level within a focus area (Year, Month…). The chart groups by it; `sort_order` is display order; `drill_to_focus_level_pk` is the level a click drills to. |
 | Filter | `level = value` condition; filters combine with AND and persist when you change focus area. |
 | Drill-down | Bar click → add filter + move to the level's drill target (if it has one). On a dashboard it applies to every chart. |
-| Dashboard | A saved page of 1, 2 or 4 chart areas (SQL/020), a metric per area; `useMetricsExplorer` is shared by all its charts. |
+| Dashboard | A saved page of 1, 2 or 4 chart areas (SQL/020), a metric and a y-axis scale per area (SQL/021); shown on Analysis, configured under Dashboards; `useMetricsExplorer` is shared by all its charts. |
+| Y-axis scale | Per chart area: metric default, 0 to 100 (stretches above 100), fit to data, or custom. Only custom bounds are hard: bars beyond them get a striped (barber-pole) end, the tooltip shows the real value (`metricFormat.effectiveScale`, `clipToScale`). |
 | Session | The stored login response (`prism_auth` in `localStorage`). |
 
 **Related documents**

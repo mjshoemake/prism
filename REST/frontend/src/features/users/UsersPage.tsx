@@ -55,7 +55,7 @@ export function UsersPage() {
 
   return (
     <div className="container py-3 w-100">
-      <div className="card shadow-purple">
+      <div className="card shadow-purple page-card">
         <div className="card-header d-flex flex-wrap gap-2 align-items-center">
           <h5 className="mb-0 me-auto">
             Users <span className="badge text-bg-secondary align-middle">{shown.length}</span>

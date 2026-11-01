@@ -108,6 +108,14 @@ body {
   background-color: var(--bs-primary);
   border-color: var(--bs-primary);
   color: white;
+  /* Bootstrap draws the disabled, pressed and focus states from these variables (default blue otherwise). */
+  --bs-btn-disabled-bg: var(--bs-primary);
+  --bs-btn-disabled-border-color: var(--bs-primary);
+  --bs-btn-disabled-color: white;
+  --bs-btn-active-bg: var(--bs-primary-dark);
+  --bs-btn-active-border-color: var(--bs-primary-dark);
+  --bs-btn-active-color: white;
+  --bs-btn-focus-shadow-rgb: 151, 124, 199;
 }
 
 .btn-primary:hover {

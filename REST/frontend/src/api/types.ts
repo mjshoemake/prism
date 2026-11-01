@@ -68,10 +68,24 @@ export interface ChartRow {
 /** Chart areas on a dashboard: 1 = one chart, 2 = two stacked, 4 = quadrants. */
 export type DashboardLayout = 1 | 2 | 4;
 
-/** The metric in one chart area; positions 1–4 in reading order (2-chart layout: 1 top, 2 bottom). */
+/**
+ * Y-axis scale of a chart area (SQL/021):
+ * - metric: the metric's own default (`MetricInfo.scale_mode`);
+ * - zero_100: 0 to 100, extended above 100 when a value exceeds it;
+ * - fit: 0 to just above the highest value;
+ * - custom: a hard minimum and/or maximum (`y_axis_min`, `y_axis_max`); bars beyond them are marked, not hidden.
+ */
+export type YAxisMode = 'metric' | 'zero_100' | 'fit' | 'custom';
+
+/** The metric in one chart area and its y-axis scale; positions 1–4 in reading order (2-chart layout: 1 top, 2 bottom). */
 export interface DashboardChart {
   position: number;
   metric_pk: number;
+  y_axis_mode: YAxisMode;
+  /** Custom scale only (null otherwise): the axis minimum; null = 0. */
+  y_axis_min: number | null;
+  /** Custom scale only (null otherwise): the axis maximum; null = fit to the data. */
+  y_axis_max: number | null;
 }
 
 /**

@@ -36,7 +36,7 @@ Spring Boot serves whatever is in `src/main/resources/static`, so the release or
 (cd frontend && npm run build) && mvn clean package
 ```
 
-The UI is then at `http://localhost:8080/`. Routes use the URL hash (`/#/metrics`, `/#/users`, …)
+The UI is then at `http://localhost:8080/`. Routes use the URL hash (`/#/analysis`, `/#/dashboards`, `/#/users`, …)
 so Spring doesn't need a fallback route for client-side paths.
 
 ## Project layout
@@ -49,6 +49,7 @@ src/
 │   ├── client.ts            fetch wrapper (JSON, ApiError, abort helpers)
 │   ├── types.ts             Shapes of the API's JSON
 │   ├── metricsApi.ts        /api/metrics/*
+│   ├── dashboardsApi.ts     /api/dashboards/* (user from X-User-ID until sessions, roadmap #4)
 │   ├── usersApi.ts          /api/users/*
 │   ├── settingsApi.ts       /api/settings
 │   └── authApi.ts           /api/auth/*
@@ -64,19 +65,25 @@ src/
 │   ├── LoadingSpinner.tsx
 │   └── Modal.tsx            Accessible dialog used for add/edit forms
 ├── features/                One folder per screen/domain
-│   ├── metrics/
-│   │   ├── MetricsPage.tsx          Page: sidebar + chart
-│   │   ├── useMetricsExplorer.ts    All drill-down state and data loading (requests by IDs only)
-│   │   ├── useMetricList.ts         Metrics from GET /api/metrics/list + the selected one
-│   │   ├── metricFormat.ts          Value/tick/legend formatting and y-axis bounds from the metric's metadata
-│   │   ├── filters.ts               Filter type, (blank) label, request filters
-│   │   └── components/              SelectionsPanel, ActiveFilters, ChartPanel, MetricBarChart
+│   ├── analysis/
+│   │   ├── AnalysisPage.tsx         Page (/#/analysis?dashboard=N): a saved dashboard's 1, 2 or 4 charts with shared
+│   │   │                            drill-down; creates "My dashboard" for a user with none
+│   │   ├── lastDashboard.ts         Last opened dashboard, remembered in localStorage ("prism_last_dashboard")
+│   │   └── components/              AnalysisSidebar (dashboard picker + Edit, focus area/level, filters)
 │   ├── dashboards/
-│   │   ├── DashboardsPage.tsx       Page (/#/dashboards): sidebar + 1, 2 or 4 chart areas
-│   │   ├── useDashboards.ts         The user's saved dashboards; every change saved at once (undone on failure)
-│   │   ├── layouts.ts               Layouts, visible positions, metric per position
-│   │   └── components/              DashboardSidebar (picker, new/rename/delete, layout, shared selections),
-│   │                                DashboardChartCard (metric picker + chart)
+│   │   ├── DashboardListPage.tsx    Page (/#/dashboards): list with Open / Edit / Delete, New dashboard
+│   │   ├── DashboardEditPage.tsx    Page (/#/dashboards/new, /#/dashboards/N/edit[?from=analysis]): name, layout,
+│   │   │                            metric + y-axis scale per chart area; Save/Cancel return where the user came from
+│   │   ├── useDashboards.ts         The user's dashboards: list / create / update / remove (no implicit saves)
+│   │   ├── layouts.ts               Layouts, visible positions, area labels, chart area per position
+│   │   └── components/              DashboardChartCard (header label + chart; no metric picker)
+│   ├── metrics/
+│   │   ├── useMetricsExplorer.ts    All drill-down state and data loading for one or more charts (IDs only)
+│   │   ├── useMetricList.ts         Metrics from GET /api/metrics/list
+│   │   ├── metricFormat.ts          Value/tick/legend formatting; effectiveScale (y-axis from the chart's scale or the
+│   │   │                            metric's default), clipToScale (hard custom bounds)
+│   │   ├── filters.ts               Filter type, (blank) label, request filters
+│   │   └── components/              ActiveFilters, MetricBarChart (incl. the barber-pole plugin)
 │   ├── users/
 │   │   ├── UsersPage.tsx
 │   │   ├── useUsers.ts              List + CRUD with toasts
@@ -100,14 +107,26 @@ prototypes/                          Old experiments, not built (see prototypes/
 
 ## How the metrics drill-down works
 
-1. Load the metrics (`GET /api/metrics/list`); select the first. Load focus areas; select the first.
+The Analysis page shows one saved dashboard; every chart area has its own metric and y-axis scale (set on the Edit
+page), and all charts share the focus area, level and filters.
+
+1. Load the metrics (`GET /api/metrics/list`) and the user's dashboards; open the one in the URL, else the last
+   opened, else the first. Load focus areas; select the first.
 2. Load that area's focus levels; select the level last used in that area, else the first.
-3. `POST /api/metrics/data` with `{metric_pk, focus_level_pk, filters}` — IDs and values only. Rows come back as `[{key, label, value}]`: the label is shown on the bar; the key identifies it (labels may repeat, e.g. "Sprint 1" of two years).
-4. Clicking a bar adds the filter `<level> = <bar label>` and moves to the level's drill target (`drill_to_focus_level_pk`, from the API). A level without one only adds the filter. An area can hold several drill paths (e.g. Year → … → Year & Sprint, and Quarter → Month → Sprint); the order levels are listed in is for display only. Changing the metric, the level or the filters re-runs step 3. Filters are kept when the metric or the area changes.
+3. For each visible chart, `POST /api/metrics/data` with `{metric_pk, focus_level_pk, filters}` — IDs and values only. Rows come back as `[{key, label, value}]`: the label is shown on the bar; the key identifies it (labels may repeat, e.g. "Sprint 1" of two years).
+4. Clicking a bar adds the filter `<level> = <bar label>` and moves to the level's drill target (`drill_to_focus_level_pk`, from the API). A level without one only adds the filter. An area can hold several drill paths (e.g. Year → … → Year & Sprint, and Quarter → Month → Sprint); the order levels are listed in is for display only. A click on any chart filters and drills every chart. Changing the dashboard, the level or the filters re-runs step 3. Filters are kept when the metric or the area changes.
+
+### Y-axis scale
+
+Set per chart area on the Edit page (`Dashboard_Charts.y_axis_mode`, SQL/021): **Metric default**, **0 to 100**,
+**Fit to data** or **Custom** (minimum and/or maximum). Only Custom bounds are hard: a bar above the maximum is drawn to
+the top with a striped (barber-pole) end, a bar below a raised minimum as a short striped stub, and the tooltip shows
+the real value; a minimum above 0 shows "Axis starts at …". 0 to 100 stretches above 100 when a value exceeds it.
+Scaling is visual only.
 
 ### Adding a metric
 
-No UI change: insert a row into the `Metrics` table (type, columns, title, unit, decimals, scale — see `REST/CLAUDE.md`). It appears in the Metric picker within 15 minutes (the server's metadata cache) or after a restart.
+No UI change: insert a row into the `Metrics` table (type, columns, title, unit, decimals, scale — see `REST/CLAUDE.md`). It appears in the Edit page's metric lists within 15 minutes (the server's metadata cache) or after a restart.
 
 ## Known issues / TODO
 

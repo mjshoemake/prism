@@ -55,9 +55,13 @@ flowchart LR
     filter --> c4["Chart 4 re-queries"]
 ```
 
-**Today (SQL/020, Oct 2026):** saved dashboards of 1, 2 or 4 charts work this way: each chart area has its own
-metric, and the focus area, level and filters are shared, so a click on any chart filters and drills them all. The
-single-chart Metrics page uses the same drill-down. No tabs yet (owner: one page per dashboard for now).
+**Today (SQL/020–021, Oct 2026):** saved dashboards of 1, 2 or 4 charts work this way: each chart area has its own
+metric and y-axis scale, and the focus area, level and filters are shared, so a click on any chart filters and drills
+them all. Pages (owner, 2026-10-31): **Analysis** shows one of the user's dashboards (picked in its sidebar, with an
+Edit button; a user with none gets "My dashboard" with one chart); **Dashboards** is configuration only (a list with
+Open, Edit and Delete, and New); the **edit page** sets the name, the layout and, per chart area, the metric and the
+y-axis scale. Charts carry a header label ("Say/Do Ratio by Sprint") and no metric picker. No tabs yet (owner: one page
+per dashboard for now). A future **Metrics** menu will hold the fact, dimension and metric admin pages (roadmap #5).
 
 ## 3. Architecture
 
@@ -290,13 +294,16 @@ same rows. Prism writes the SQL:
     just above the highest value.
   - Other types: 0 to a round number just above the highest value.
 - **Metric default:** an admin can override the default per metric: 0–100, fit to data, or fixed minimum/maximum.
-- **User control on the chart:** a Scale control with **0–100** (percentages), **Fit to data**, or **Custom** (minimum
-  and/or maximum, to look past severe outliers). Remembered for the session; saved per chart once dashboards exist.
-- **Outliers are never dropped.** A bar beyond the maximum is drawn to the top edge with a **barber-pole (striped)
-  top** so it can't be mistaken for a true-height bar. Its **real value is shown on hover** (tooltips always show the
+- **User control per chart:** set on the dashboard's edit page and saved with the chart area (SQL/021; owner,
+  2026-10-31: no unsaved toggle on the chart): **Metric default**, **0–100**, **Fit to data**, or **Custom** (minimum
+  and/or maximum, to look past severe outliers).
+- **Only custom bounds are hard** (owner, 2026-10-31). 0–100 stretches above 100 when a value exceeds it, exactly like
+  the percentage default; a metric's fixed bounds stay suggestions.
+- **Outliers are never dropped.** A bar beyond a custom maximum is drawn to the top edge with a **barber-pole
+  (striped) top** so it can't be mistaken for a true-height bar; a bar below a raised minimum is a short striped stub. Its **real value is shown on hover** (tooltips always show the
   true value).
 - **Raised minimum:** a minimum above 0 is flagged on the chart ("Axis starts at 60"), and active custom bounds are
-  shown beside the Scale control.
+  shown in the chart's header ("Axis 60% to 100%").
 - **Scaling is visual only;** it never changes the calculated values.
 
 **Writing a calculation.**
@@ -438,11 +445,11 @@ The UI's own security rules are covered in the [UI developer guide](../frontend/
 | Generated temporary passwords with expiry; System Settings page (per enterprise: temporary password validity) | **Working** (SQL/010) |
 | Focus area / level ordering via `sort_order` | **Working** (SQL/009) |
 | API builds metric SQL from the `Metrics` table by metric type; UI sends IDs only | **Working** (SQL/012) |
-| Y-axis Scale control (0–100 / fit / custom) with barber-pole outliers | Planned (per-metric default scale works today) |
+| Y-axis scale per chart (metric default / 0–100 / fit / custom) with barber-pole outliers | **Working** (SQL/021; set on the dashboard's edit page) |
 | Drill-down pointers (`drill_to_focus_level_pk`), several paths per area | **Working** (SQL/015, step 1d): the UI drills by the pointer; a level without one only adds the filter |
 | Label vs key columns per focus level | **Working** (SQL/015, SQL/018, step 1e): charts group, sort and filter by the key and show the label (e.g. "Sprint 26" with key 2024-12-23) |
 | Data sources / fact & dimension model, exclusions, enterprise scoping | **In progress:** `Data_Sources`, `Facts`, `Dimensions`, `Facts_Dimensions_Assoc` created and seeded with the demo schema (SQL/013), not yet used by the query builder; exclusions and enterprise scoping planned |
-| Saved dashboards: 1, 2 (stacked) or 4 (quadrants) charts, a metric per chart, dashboard-wide drill-down | **Working** (SQL/020; owner from the browser until sessions, #4) |
+| Saved dashboards: 1, 2 (stacked) or 4 (quadrants) charts, a metric per chart, dashboard-wide drill-down; Analysis page, Dashboards list, edit page | **Working** (SQL/020–021; owner from the browser until sessions, #4) |
 | Dashboard tabs, sharing dashboards | Planned |
 | Server-side sessions, roles, tenant isolation | Planned |
 | Client-owned data schema / client data API contract | Planned |

@@ -49,7 +49,7 @@ export function LoginPage() {
 
   return (
     <div className="container py-4 narrow-container">
-      <div className="card shadow-purple">
+      <div className="card shadow-purple page-card">
         <div className="card-header">
           <h5 className="mb-0">Login</h5>
         </div>

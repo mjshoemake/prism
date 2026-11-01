@@ -11,7 +11,7 @@
   max-width: 480px;
 }
 
-/* ---- Metrics page: resizable sidebar + chart -------------------------------- */
+/* ---- Analysis page: resizable sidebar + charts ------------------------------ */
 
 .metrics-page {
   display: flex;
@@ -34,10 +34,6 @@
   padding: 1rem;
 }
 
-.chart-card-body {
-  height: 70vh;
-}
-
 .section-title {
   margin-bottom: 0.5rem;
   font-size: inherit;
@@ -54,7 +50,7 @@ label.form-label {
   font-weight: 500;
 }
 
-/* ---- Dashboards: 1, 2 (stacked) or 4 (quadrants) chart areas ----------------- */
+/* ---- Analysis: a dashboard of 1, 2 (stacked) or 4 (quadrants) chart areas ----- */
 
 .dashboard-grid {
   display: grid;
@@ -80,13 +76,110 @@ label.form-label {
   flex-direction: column;
 }
 
-.dashboard-chart__picker {
-  min-width: 14rem;
+/* Header label of a chart area: "Say/Do Ratio by Sprint". */
+.dashboard-chart__title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: inherit; /* white, from the purple title bar (.page-card) */
+}
+
+.dashboard-chart__scale {
+  font-weight: 500;
 }
 
 .dashboard-chart__body {
   flex: 1;
   min-height: 12rem;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
+/* The chart canvas fills its area, below an optional note ("Axis starts at 60%"). */
+.metric-chart {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.metric-chart__axis-note {
+  margin-bottom: 0.25rem;
+}
+
+.metric-chart__canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- Dashboards list and edit page --------------------------------------------- */
+
+.dashboard-edit {
+  max-width: 960px;
+}
+
+.dashboard-edit__name {
+  max-width: 28rem;
+}
+
+.dashboard-edit__areas {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+/* Group boxes follow the dashboard's shape: quadrants side by side on wide screens. */
+@media (min-width: 768px) {
+  .dashboard-edit__areas--4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* A chart area's group box: a tinted panel with a header strip, so the dark inputs inside stand out. */
+.dashboard-area {
+  background-color: rgba(74, 44, 122, 0.35); /* --bs-primary-darker, translucent */
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+  padding: 0 1rem 0.75rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dashboard-area__legend {
+  float: left; /* puts the legend inside the box instead of on its border */
+  width: calc(100% + 2rem);
+  margin: 0 -1rem 0.75rem;
+  padding: 0.5rem 1rem;
+  background-color: var(--bs-primary-darker);
+  border-bottom: 1px solid var(--bs-border-color);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--bs-text-light);
+}
+
+.dashboard-area__legend + * {
+  clear: both;
+}
+
+/* ---- Title bars: every page card, dialog and Analysis chart (one look everywhere) ---------- */
+
+.page-card > .card-header,
+.modal-header {
+  background-color: var(--bs-primary-darker);
+  color: var(--bs-white);
+}
+
+.page-card > .card-header .badge.text-bg-secondary {
+  background-color: var(--bs-darker) !important;
+}
+
+/* ---- List pages (Users, Dashboards): alternating rows ---------------------------------- */
+
+/* Every other row a muted purple, dark enough for the same bright text; hover stays the theme's highlight. */
+.list-table {
+  --bs-table-striped-bg: #2f2147;
+  --bs-table-striped-color: var(--bs-table-color);
 }
 
 /* ---- Toast ------------------------------------------------------------------ */

@@ -1,20 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, errorMessage, isAbortError } from '../../api/client';
 import { dashboardsApi } from '../../api/dashboardsApi';
-import type { Dashboard, DashboardLayout } from '../../api/types';
-import { useToast } from '../../components/toast/useToast';
-import { withMetric } from './layouts';
+import type { Dashboard, DashboardRequest } from '../../api/types';
 
 /**
- * The signed-in user's saved dashboards and the one being viewed. Every change (layout, a chart area's metric, the
- * name) is saved right away; if saving fails, the change is undone and the server's message shown.
+ * The signed-in user's saved dashboards, by name, and the calls that change them. Nothing is saved implicitly: the
+ * edit page saves a whole dashboard at once. Calls throw on failure; `serverMessage` turns the error into the
+ * server's text (e.g. "You already have a dashboard named 'X'.").
  */
-export function useDashboards(userId: string | null, defaultMetricPk: number | null) {
-  const { showToast } = useToast();
+export function useDashboards(userId: string | null) {
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
-  const [selectedPk, setSelectedPk] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     if (!userId) return;
@@ -24,7 +22,7 @@ export function useDashboards(userId: string | null, defaultMetricPk: number | n
       .list(userId, controller.signal)
       .then((list) => {
         setDashboards(list);
-        setSelectedPk((current) => (list.some((d) => d.dashboard_pk === current) ? current : (list[0]?.dashboard_pk ?? null)));
+        setError(null);
       })
       .catch((e) => {
         if (!isAbortError(e)) setError(`Failed to fetch dashboards: ${serverMessage(e)}`);
@@ -33,108 +31,57 @@ export function useDashboards(userId: string | null, defaultMetricPk: number | n
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [userId]);
+  }, [userId, version]);
 
-  const selected = dashboards.find((d) => d.dashboard_pk === selectedPk) ?? null;
-
-  /** Saves the whole dashboard; shows it at once and undoes the change if the server refuses it. */
-  const save = useCallback(
-    async (next: Dashboard): Promise<boolean> => {
-      if (!userId) return false;
-      const previous = dashboards;
-      setDashboards((list) => list.map((d) => (d.dashboard_pk === next.dashboard_pk ? next : d)));
-      try {
-        const saved = await dashboardsApi.update(userId, next.dashboard_pk, {
-          name: next.name,
-          layout: next.layout,
-          charts: next.charts,
-        });
-        setDashboards((list) => sortByName(list.map((d) => (d.dashboard_pk === saved.dashboard_pk ? saved : d))));
-        return true;
-      } catch (e) {
-        setDashboards(previous);
-        showToast(`Not saved: ${serverMessage(e)}`, 'warning');
-        return false;
-      }
-    },
-    [dashboards, showToast, userId],
-  );
+  /** Fetches the list again (e.g. after another tab changed it). */
+  const reload = useCallback(() => setVersion((v) => v + 1), []);
 
   const create = useCallback(
-    async (name: string): Promise<boolean> => {
-      if (!userId) return false;
-      try {
-        const created = await dashboardsApi.create(userId, {
-          name,
-          layout: 1,
-          charts: defaultMetricPk === null ? [] : [{ position: 1, metric_pk: defaultMetricPk }],
-        });
-        setDashboards((list) => sortByName([...list, created]));
-        setSelectedPk(created.dashboard_pk);
-        showToast(`Created dashboard: ${created.name}`, 'success');
-        return true;
-      } catch (e) {
-        showToast(`Not created: ${serverMessage(e)}`, 'warning');
-        return false;
-      }
+    async (request: DashboardRequest): Promise<Dashboard> => {
+      if (!userId) throw new Error('Not signed in.');
+      const created = await dashboardsApi.create(userId, request);
+      setDashboards((list) => sortByName([...list, created]));
+      return created;
     },
-    [defaultMetricPk, showToast, userId],
+    [userId],
   );
 
-  const remove = useCallback(async () => {
-    if (!userId || !selected) return;
-    try {
-      await dashboardsApi.remove(userId, selected.dashboard_pk);
-      const rest = dashboards.filter((d) => d.dashboard_pk !== selected.dashboard_pk);
-      setDashboards(rest);
-      setSelectedPk(rest[0]?.dashboard_pk ?? null);
-      showToast(`Deleted dashboard: ${selected.name}`, 'info');
-    } catch (e) {
-      showToast(`Not deleted: ${serverMessage(e)}`, 'warning');
-    }
-  }, [dashboards, selected, showToast, userId]);
-
-  const setLayout = useCallback(
-    (layout: DashboardLayout) => {
-      if (selected && selected.layout !== layout) void save({ ...selected, layout });
+  const update = useCallback(
+    async (dashboardPk: number, request: DashboardRequest): Promise<Dashboard> => {
+      if (!userId) throw new Error('Not signed in.');
+      const saved = await dashboardsApi.update(userId, dashboardPk, request);
+      setDashboards((list) => sortByName(list.map((d) => (d.dashboard_pk === saved.dashboard_pk ? saved : d))));
+      return saved;
     },
-    [save, selected],
+    [userId],
   );
 
-  const setMetric = useCallback(
-    (position: number, metricPk: number | null) => {
-      if (selected) void save({ ...selected, charts: withMetric(selected.charts, position, metricPk) });
+  const remove = useCallback(
+    async (dashboardPk: number): Promise<void> => {
+      if (!userId) throw new Error('Not signed in.');
+      await dashboardsApi.remove(userId, dashboardPk);
+      setDashboards((list) => list.filter((d) => d.dashboard_pk !== dashboardPk));
     },
-    [save, selected],
+    [userId],
   );
 
-  const rename = useCallback(
-    (name: string) => (selected ? save({ ...selected, name: name.trim() }) : Promise.resolve(false)),
-    [save, selected],
-  );
-
-  return {
-    dashboards,
-    selected,
-    select: setSelectedPk,
-    loading,
-    error,
-    create,
-    rename,
-    remove,
-    setLayout,
-    setMetric,
-  };
+  return { dashboards, loading, error, reload, create, update, remove };
 }
 
-function sortByName(list: Dashboard[]): Dashboard[] {
+export function sortByName(list: Dashboard[]): Dashboard[] {
   return [...list].sort((a, b) => a.name.localeCompare(b.name) || a.dashboard_pk - b.dashboard_pk);
 }
 
-function serverMessage(error: unknown): string {
+/** The server's {success:false, message} text, else the general error text. */
+export function serverMessage(error: unknown): string {
   if (error instanceof ApiError) {
     const body = error.json<{ message?: string }>();
     if (body?.message) return body.message;
   }
   return errorMessage(error);
+}
+
+/** True for a 409 (a dashboard with that name already exists). */
+export function isConflict(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409;
 }

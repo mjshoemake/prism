@@ -1,9 +1,11 @@
 package com.prism.api.dashboards;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 
@@ -70,5 +72,84 @@ class DashboardsServiceTests {
     @Test
     void nullRequestIsRefused() {
         assertTrue(refused(null).contains("required"));
+    }
+
+    // ---- Y-axis scale per chart (SQL/021) --------------------------------------------------------------------------
+
+    private static Dashboard.ChartArea scaled(String mode, String min, String max) {
+        return new Dashboard.ChartArea(1, 7, mode, min == null ? null : new BigDecimal(min),
+                max == null ? null : new BigDecimal(max));
+    }
+
+    private static Dashboard.ChartArea validChart(Dashboard.ChartArea chart) {
+        return DashboardsService.validate(new DashboardRequest("d", 1, List.of(chart))).charts().get(0);
+    }
+
+    private static String refusedChart(Dashboard.ChartArea chart) {
+        return refused(new DashboardRequest("d", 1, List.of(chart)));
+    }
+
+    @Test
+    void scaleDefaultsToTheMetricsOwn() {
+        assertEquals("metric", validChart(area(1, 7)).yAxisMode());
+        assertEquals("metric", validChart(scaled(null, null, null)).yAxisMode());
+        assertEquals("metric", validChart(scaled("  ", null, null)).yAxisMode());
+    }
+
+    @Test
+    void namedScalesAreKept() {
+        for (var mode : List.of("metric", "zero_100", "fit")) {
+            var chart = validChart(scaled(mode, null, null));
+            assertEquals(mode, chart.yAxisMode());
+            assertNull(chart.yAxisMin());
+            assertNull(chart.yAxisMax());
+        }
+    }
+
+    @Test
+    void boundsAreDroppedForScalesWithoutThem() {
+        // A form may still hold the custom bounds after the user switched to another scale.
+        var chart = validChart(scaled("fit", "10", "90"));
+        assertEquals("fit", chart.yAxisMode());
+        assertNull(chart.yAxisMin());
+        assertNull(chart.yAxisMax());
+    }
+
+    @Test
+    void customScaleNeedsAMinimumAMaximumOrBoth() {
+        var both = validChart(scaled("custom", "60", "100"));
+        assertEquals(new BigDecimal("60"), both.yAxisMin());
+        assertEquals(new BigDecimal("100"), both.yAxisMax());
+        assertNull(validChart(scaled("custom", "60", null)).yAxisMax());
+        assertNull(validChart(scaled("custom", null, "150.5")).yAxisMin());
+        validChart(scaled("custom", "-20", "0"));
+        assertTrue(refusedChart(scaled("custom", null, null)).contains("minimum, a maximum or both"));
+    }
+
+    @Test
+    void customMinimumMustBeBelowTheMaximum() {
+        assertTrue(refusedChart(scaled("custom", "50", "50")).contains("less than the maximum"));
+        assertTrue(refusedChart(scaled("custom", "80", "20")).contains("less than the maximum"));
+    }
+
+    @Test
+    void customBoundsMustFitTheColumn() {
+        assertTrue(refusedChart(scaled("custom", null, "10000000000")).contains("between"));
+        assertTrue(refusedChart(scaled("custom", "-10000000000", null)).contains("between"));
+        validChart(scaled("custom", null, "9999999999.9999"));
+    }
+
+    @Test
+    void storedBoundsComeBackPlain() {
+        // NUMERIC(14,4) reads back as 60.0000; the JSON should say 60, not 60.0000 or 6E+1.
+        assertEquals("60", DashboardsService.decimal(new BigDecimal("60.0000")).toString());
+        assertEquals("150.5", DashboardsService.decimal(new BigDecimal("150.5000")).toString());
+        assertEquals("0", DashboardsService.decimal(new BigDecimal("0.0000")).toString());
+        assertNull(DashboardsService.decimal(null));
+    }
+
+    @Test
+    void unknownScaleIsRefused() {
+        assertTrue(refusedChart(scaled("zero_to_100", null, null)).contains("unknown y-axis scale"));
     }
 }

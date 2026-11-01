@@ -5,7 +5,7 @@
 > and the numbered backlog** live in [CLAUDE.md](../CLAUDE.md). This file says *what to do next, in what order*.
 > Update it whenever an item is finished or a new one is agreed.
 
-_Last updated: 2026-10-24._
+_Last updated: 2026-10-31._
 
 ---
 
@@ -23,8 +23,33 @@ _Last updated: 2026-10-24._
      user's dashboard 404, hidden areas kept, delete); 42 unit tests; whole-frontend typecheck; a browser run
      (create → 4 charts → pick metrics → one click drills all four → 2 charts → back to 4 restores them → rename →
      delete); the Metrics page's click-through unchanged. No calculation change (parity unaffected).
-   - **Owner:** run SQL/019 + SQL/020 together (019 was waiting for the next database change; then parity, expect
-     only Year & Sprint label differences, and `--freeze`), build, try `/#/dashboards`.
+   - **Owner:** see item 2 (run SQL/019, 020 and 021 together).
+2. **Dashboard redesign and per-chart y-axis scale** (owner, 2026-10-31; built 2026-10-31; roadmap #2 done this way):
+   - Pages: the Metrics page became **Analysis** (`/#/analysis?dashboard=N`; `/#/metrics` redirects): a dashboard
+     picker with an Edit button, the shared focus area / level / filters, and a header label per chart ("Say/Do Ratio
+     by Sprint"), no metric picker; a user with no dashboards gets "My dashboard" (1 chart, first metric).
+     **Dashboards** (`/#/dashboards`) is configuration only: a list (Name, Layout, Metrics; Open, Edit, Delete with
+     confirm) and New. The **edit page** (`/#/dashboards/new`, `/#/dashboards/N/edit`): name, layout, a group box per
+     visible chart area with its metric and y-axis scale; Save / Cancel return to Analysis (same dashboard) or the
+     list; hidden areas are kept. Menu: Dashboard → Analysis, Dashboards.
+   - Scale (owner: percentages may expand): metric default, 0–100 (stretches above 100), fit, custom (minimum and/or
+     maximum, hard): bars above the maximum get a barber-pole end, bars below a raised minimum a striped stub, the
+     tooltip shows the real value, "Axis starts at X" on the chart and the bounds in its header.
+   - SQL/021 `Dashboard_Charts.y_axis_mode / y_axis_min / y_axis_max` (+ CHECKs); API: scale on every chart area,
+     validated (`validScale`), `GET /api/dashboards/{pk}`.
+   - Checked in the Claude session: SQL/021 on a database built from all scripts, run twice, constraints accept and
+     refuse the right rows; 15 unit tests (8 new) and an end-to-end run of the controller against Postgres (16
+     checks); whole-frontend typecheck against the real React, React Router and Chart.js types; a browser run with
+     the real Chart.js (47 checks: auto-create once, edit → Save → back, scale rules and pixels of the barber pole,
+     one click drills four charts, validation, hidden areas kept, list New / duplicate name / Edit / Cancel / Delete /
+     Open, menu). No calculation change (parity unaffected).
+   - **Owner:** `git rm` the five retired files (the build fails until they're gone: they import removed helpers):
+     `frontend/src/features/metrics/MetricsPage.tsx`, `frontend/src/features/metrics/components/SelectionsPanel.tsx`,
+     `frontend/src/features/metrics/components/ChartPanel.tsx`, `frontend/src/features/dashboards/DashboardsPage.tsx`,
+     `frontend/src/features/dashboards/components/DashboardSidebar.tsx`. Run SQL/019, 020 and 021 together (then
+     parity: expect only Year & Sprint label differences, and `--freeze`), build, try `/#/analysis` and `/#/dashboards`.
+   - Known gap (unchanged): a dashboard offers every focus area, not only those all its metrics share; a chart whose
+     metric can't use the chosen level shows the server's message.
 
 Article URLs are added to the Advisor content once the owner's *Agile Metrics* series is
 further along (owner, 2026-10-23).
@@ -99,11 +124,8 @@ the real JDBC driver (2026-10-21).
      the same team in two months, the Team A/B 38%-vs-57.5% example), the demo data vs a frozen baseline, and a
      wrong-calculation check. First baseline frozen 2026-10-22 (23,557 cases, 0 differences). Every later step on this
      branch must pass `bash tools/parity/run.sh` with 0 differences.
-2. **Y-axis Scale control** on the chart: 0–100 (percentages), Fit to data, Custom min/max.
-   - Bars beyond the maximum get a **barber-pole** top, and the real value shows on hover.
-   - A raised minimum is flagged on the chart.
-   - Choice remembered per metric for the session (per chart once dashboards exist).
-   - Today a metric's `fixed` scale is only a suggestion, until this exists.
+2. ~~**Y-axis Scale control**~~ **built 2026-10-31 as a per-chart setting on the dashboard edit page** (§1 item 2;
+   SQL/021). A metric's own `fixed` scale stays a suggestion; only a chart's custom bounds are hard.
 3. **Read-only database login** for metric queries (SELECT on STAR tables only, statement timeout), as a
    second database connection.
 4. **Authentication / sessions** (backlog #5):
@@ -112,7 +134,8 @@ the real JDBC driver (2026-10-21).
    - users can't deactivate themselves;
    - fold in **#3** (missing fields → 400 via `@ControllerAdvice`).
 5. **Metadata admin screens** (owner, 2026-10-31: configuring Prism for a new database must be possible in the UI,
-   without knowing Prism's internal tables; metrics admins only, enterprise from the session, so after #4):
+   without knowing Prism's internal tables; metrics admins only, enterprise from the session, so after #4; they go
+   under a new **Metrics** menu, details to come from the owner):
    - **Data sources:** add / edit a data source (connection method, host, database, the secret's name; never the
      credentials themselves), **Test connection**;
    - **Facts and dimensions:** pick tables from the data source (with #6 schema reading), set aliases, and the
