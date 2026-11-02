@@ -1,13 +1,11 @@
 package com.prism.api.metrics;
 
 import java.time.Duration;
-import java.util.Map;
 
 import org.slf4j.Logger;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -21,10 +19,10 @@ import com.zaxxer.hikari.HikariDataSource;
  * from {@code PRISM_READER_PASSWORD}). Every query also gets a time limit on the Java side ({@code
  * prism.metric-query.timeout}), on top of the login's own {@code statement_timeout}.
  * <p>
- * Fail closed: before its first query the login is checked, and chart queries are refused (503, with a message saying
- * what to do) if it can't connect, if it is Prism's own login, if its transactions aren't read-only, or if it can use
- * Prism's schema or read any table in it (SQL/023: Prism's login owns {@code prism}, this one sees only the STAR
- * schema). Metric data is never fetched on Prism's own login instead.
+ * Fail closed: before its first query the login is checked ({@link ReadOnlyLoginCheck}), and chart queries are refused
+ * (503, with a message saying what to do) if it can't connect, if it is Prism's own login, if its transactions aren't
+ * read-only, if it is a superuser, or if it can use Prism's schema or read any table in it (SQL/023: Prism's login
+ * owns {@code prism}, this one sees only the STAR schema). Metric data is never fetched on Prism's own login instead.
  * <p>
  * The pool is private to this component (not a {@code DataSource} bean), so Spring Boot keeps configuring Prism's own
  * datasource as before. Nothing connects until the first chart request.
@@ -33,22 +31,6 @@ import com.zaxxer.hikari.HikariDataSource;
 public class MetricQueryConnection implements DisposableBean {
 
     private static final Logger log = LogCategory.SERVICE.logger(MetricQueryConnection.class);
-    private static final Logger audit = LogCategory.AUDIT.logger();
-
-    /**
-     * What the login may and may not do, read from the database itself. Works by catalog IDs, never by name, so it
-     * neither fails for a login that can't see Prism's schema (the goal, SQL/023) nor when that schema isn't in this
-     * database at all.
-     */
-    static final String CHECK_SQL = """
-            SELECT current_user AS login,
-                   current_setting('transaction_read_only') AS read_only,
-                   EXISTS (SELECT 1 FROM pg_namespace n
-                            WHERE n.nspname = 'prism' AND has_schema_privilege(n.oid, 'USAGE')) AS uses_prism_schema,
-                   EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                            WHERE n.nspname = 'prism' AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-                              AND has_table_privilege(c.oid, 'SELECT')) AS reads_prism_tables
-            """;
 
     private static final String SETUP_HINT =
             "Run SQL/022 and SQL/023 and set PRISM_READER_PASSWORD (REST/.env.local); see README.";
@@ -139,27 +121,10 @@ public class MetricQueryConnection implements DisposableBean {
         var jdbc = new JdbcTemplate(pool);
         jdbc.setQueryTimeout((int) Math.max(1, timeout.toSeconds()));
 
-        Map<String, Object> login;
-        try {
-            login = jdbc.queryForMap(CHECK_SQL);
-        } catch (DataAccessException e) {
-            log.warn("Metric query login '{}' can't connect: {}", username, firstLine(e));
-            throw new MetricDataUnavailableException("Can't connect to the metric data as '" + username + "' ("
-                    + firstLine(e) + "). " + SETUP_HINT, e);
-        }
-        var readOnly = "on".equals(String.valueOf(login.get("read_only")));
-        var usesPrismSchema = Boolean.TRUE.equals(login.get("uses_prism_schema"));
-        var readsPrismTables = Boolean.TRUE.equals(login.get("reads_prism_tables"));
-        if (!readOnly || usesPrismSchema || readsPrismTables) {
-            audit.warn("METRIC_QUERY_LOGIN_REFUSED login={} readOnly={} usesPrismSchema={} readsPrismTables={}",
-                    login.get("login"), readOnly, usesPrismSchema, readsPrismTables);
-            var problem = readsPrismTables ? "can read Prism's own tables"
-                    : usesPrismSchema ? "can use Prism's schema" : "isn't read-only";
-            throw refuse("The metric query login '" + login.get("login") + "' " + problem
-                    + ", so chart queries are refused. Run SQL/022 and SQL/023 (they confine that login to the STAR "
-                    + "schema).");
-        }
-        log.info("Metric queries use the read-only login '{}' (time limit {}s)", login.get("login"),
+        var login = ReadOnlyLoginCheck.verify(jdbc, "the metric data as '" + username + "'",
+                "Run SQL/022 and SQL/023 (they confine that login to the STAR schema) and set PRISM_READER_PASSWORD "
+                        + "(REST/.env.local); see README.", "METRIC_QUERY_LOGIN");
+        log.info("Metric queries use the read-only login '{}' (time limit {}s)", login,
                 jdbc.getQueryTimeout());
         return jdbc;
     }
@@ -190,12 +155,7 @@ public class MetricQueryConnection implements DisposableBean {
     /** The first line of the deepest cause's message (driver messages can run to several lines). */
     static String firstLine(Throwable e) {
         log.debug("Started");
-        var root = e;
-        while (root.getCause() != null && root.getCause() != root) {
-            root = root.getCause();
-        }
-        var message = root.getMessage() == null ? root.getClass().getSimpleName() : root.getMessage();
-        return message.lines().findFirst().orElse(message).strip();
+        return ReadOnlyLoginCheck.firstLine(e);
     }
 
     @Override

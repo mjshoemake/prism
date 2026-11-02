@@ -84,3 +84,17 @@ export function isAbortError(error: unknown): boolean {
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+/** The server's {success:false, message} text when there is one, else the general error text. */
+export function serverMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    const body = error.json<{ message?: string }>();
+    if (body?.message) return body.message;
+  }
+  return errorMessage(error);
+}
+
+/** True for a 409 Conflict (e.g. a name already in use, or a record still in use). */
+export function isConflict(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409;
+}

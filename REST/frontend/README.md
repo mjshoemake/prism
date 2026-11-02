@@ -50,6 +50,7 @@ src/
 │   ├── types.ts             Shapes of the API's JSON
 │   ├── metricsApi.ts        /api/metrics/*
 │   ├── dashboardsApi.ts     /api/dashboards/* (user from X-User-ID until sessions, roadmap #4)
+│   ├── dataSourcesApi.ts    /api/data-sources/* (enterprise from ?enterprisePk until sessions); options()
 │   ├── usersApi.ts          /api/users/*
 │   ├── settingsApi.ts       /api/settings
 │   └── authApi.ts           /api/auth/*
@@ -70,6 +71,15 @@ src/
 │   │   │                            drill-down; creates "My dashboard" for a user with none
 │   │   ├── lastDashboard.ts         Last opened dashboard, remembered in localStorage ("prism_last_dashboard")
 │   │   └── components/              AnalysisSidebar (dashboard picker + Edit, focus area/level, filters)
+│   ├── dataSources/                 Metrics → Data Sources
+│   │   ├── DataSourceListPage.tsx   Page (/#/data-sources): list with counts, Test (modal) / Edit / Delete, New
+│   │   ├── DataSourceEditPage.tsx   Page (/#/data-sources/new, /#/data-sources/N/edit): name, description, connection
+│   │   │                            (database method + host/port/db/secret name, or client API URL + secret name;
+│   │   │                            TEMPORARY "Direct (development only)": username + write-only password, offered
+│   │   │                            while GET /api/data-sources/options allows it; other saved settings kept)
+│   │   ├── useDataSources.ts        list / reload / remove
+│   │   ├── labels.ts                connection method labels and hints, connection summary
+│   │   └── components/              ConnectionTestPanel (Test connection result, one line per table)
 │   ├── dashboards/
 │   │   ├── DashboardListPage.tsx    Page (/#/dashboards): list with Open / Edit / Delete, New dashboard
 │   │   ├── DashboardEditPage.tsx    Page (/#/dashboards/new, /#/dashboards/N/edit[?from=analysis]): name, layout,

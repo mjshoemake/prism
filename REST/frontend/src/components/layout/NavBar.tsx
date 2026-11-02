@@ -44,6 +44,13 @@ export function NavBar() {
                 </Link>
               </li>
             </NavDropdown>
+            <NavDropdown title="Metrics">
+              <li>
+                <Link className="dropdown-item" to="/data-sources">
+                  Data Sources
+                </Link>
+              </li>
+            </NavDropdown>
             <NavDropdown title="Admin">
               <li>
                 <Link className="dropdown-item" to="/users">

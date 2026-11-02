@@ -8,6 +8,8 @@ import { ChangePasswordPage } from './features/auth/ChangePasswordPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { DashboardEditPage } from './features/dashboards/DashboardEditPage';
 import { DashboardListPage } from './features/dashboards/DashboardListPage';
+import { DataSourceEditPage } from './features/dataSources/DataSourceEditPage';
+import { DataSourceListPage } from './features/dataSources/DataSourceListPage';
 import { SystemSettingsPage } from './features/settings/SystemSettingsPage';
 import { UsersPage } from './features/users/UsersPage';
 
@@ -28,6 +30,9 @@ export default function App() {
                 <Route path="/dashboards" element={<DashboardListPage />} />
                 <Route path="/dashboards/new" element={<DashboardEditPage key="new" />} />
                 <Route path="/dashboards/:dashboardPk/edit" element={<DashboardEditPage />} />
+                <Route path="/data-sources" element={<DataSourceListPage />} />
+                <Route path="/data-sources/new" element={<DataSourceEditPage key="new" />} />
+                <Route path="/data-sources/:dataSourcePk/edit" element={<DataSourceEditPage />} />
                 <Route path="/users" element={<UsersPage />} />
                 <Route path="/settings" element={<SystemSettingsPage />} />
                 <Route path="/change-password" element={<ChangePasswordPage />} />

@@ -106,6 +106,88 @@ export interface DashboardRequest {
   charts: DashboardChart[];
 }
 
+// ---- Data sources -------------------------------------------------------------
+
+/**
+ * How Prism reaches a database data source (SQL/013); prism_database = the demo STAR schema in Prism's database.
+ * direct_dev is TEMPORARY and development-only (SQL/024): its login is saved in the data source's properties.
+ */
+export type DbConnectionMethod =
+  | 'prism_database'
+  | 'firewall_allow_list'
+  | 'private_link'
+  | 'outbound_agent'
+  | 'direct_dev';
+
+/** One saved setting of a data source (SQL/024). A secret (the password) comes back with value null. */
+export interface DataSourceProperty {
+  name: string;
+  value: string | null;
+  secret: boolean;
+  has_value: boolean;
+}
+
+/**
+ * A data source (GET /api/data-sources): where a STAR schema lives and how Prism connects. Exactly one connection:
+ * a database (db_*) or a client-run API (api_*). Credentials are never returned: *_credentials_ref is the NAME of the
+ * secret in the secrets store; the temporary direct_dev method keeps its login in properties (password value hidden).
+ */
+export interface DataSource {
+  data_source_pk: number;
+  enterprise_pk: number;
+  name: string;
+  description: string | null;
+  connection_type: 'database' | 'api';
+  db_connection_method: DbConnectionMethod | null;
+  db_host: string | null;
+  db_port: number | null;
+  db_name: string | null;
+  db_credentials_ref: string | null;
+  api_url: string | null;
+  api_credentials_ref: string | null;
+  fact_count: number;
+  dimension_count: number;
+  metric_count: number;
+  created_at: Timestamp | null;
+  updated_at: Timestamp | null;
+  properties: DataSourceProperty[];
+}
+
+/** Body of POST /api/data-sources and PUT /api/data-sources/{pk}; fields that don't apply are ignored. */
+export type DataSourceRequest = Pick<
+  DataSource,
+  | 'name'
+  | 'description'
+  | 'connection_type'
+  | 'db_connection_method'
+  | 'db_host'
+  | 'db_port'
+  | 'db_name'
+  | 'db_credentials_ref'
+  | 'api_url'
+  | 'api_credentials_ref'
+> & {
+  /** Replaces the saved settings (direct_dev only). A secret with value null keeps the saved one. */
+  properties?: { name: string; value: string | null }[];
+};
+
+/** GET /api/data-sources/options: whether the development-only method is on, and the settings it may hold. */
+export interface DataSourceOptions {
+  dev_connections_allowed: boolean;
+  properties: { name: string; label: string; secret: boolean; required: boolean; driver: boolean; hint: string }[];
+}
+
+/**
+ * Result of POST /api/data-sources/{pk}/test: the tables the connection's login can read, per schema, and one line per
+ * registered fact / dimension table.
+ */
+export interface ConnectionTestResult {
+  success: boolean;
+  message: string;
+  readable: { schema: string; tables: number }[];
+  tables: { kind: 'fact' | 'dimension'; name: string; table: string; readable: boolean; error: string | null }[];
+}
+
 // ---- Users ----------------------------------------------------------------
 
 /** Timestamps arrive as ISO-8601 strings (Jackson's Spring Boot default); epoch millis are tolerated. */

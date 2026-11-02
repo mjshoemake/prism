@@ -5,7 +5,7 @@
 > and the numbered backlog** live in [CLAUDE.md](../CLAUDE.md). This file says *what to do next, in what order*.
 > Update it whenever an item is finished or a new one is agreed.
 
-_Last updated: 2026-11-01._
+_Last updated: 2026-11-01 (late: STAR schema setup design agreed, next session starts at #5 "Facts")._
 
 ---
 
@@ -181,8 +181,96 @@ the real JDBC driver (2026-10-21).
    built now without those checks (owner, 2026-11-01: functionality first), role checks added with #4; they go
    under a new **Metrics** menu, details to come from the owner). Also fold in backlog **#3** (missing request
    fields → 400 via `@ControllerAdvice` instead of 500): a functional fix these screens need:
-   - **Data sources:** add / edit a data source (connection method, host, database, the secret's name; never the
-     credentials themselves), **Test connection**;
+   - ✅ **Data sources** (built 2026-11-01; owner: the data source is the parent of everything else, under the
+     enterprise, so it comes first): Metrics → Data Sources list (fact / dimension / metric counts, Test, Edit,
+     Delete refused while facts or dimensions belong to it) and edit page (database: how Prism connects, and for
+     client databases host, port, database, the secret's NAME; client API: https URL + secret name; never
+     credentials). **Test connection** runs the read-only login check and reads each registered table for the Prism
+     database; other connections are saved but answered honestly ("can't connect yet"). `/api/data-sources`. Checked:
+     47 unit tests (7 new), a real Spring context against Postgres (15 checks: counts, all three demo tables readable,
+     a revoked grant reported, create / duplicate any case / validation / unknown enterprise, API switch clears
+     database fields, other enterprise 404, delete 409 with counts then 204), browser run (19 checks + screenshots).
+     Also fixed: Analysis could send "create My dashboard" twice when the page mounted twice in a row (the server
+     refused the second, so no duplicate); the guard is now shared across mounts. **Next: facts and dimensions**
+     (under a data source).
+   - **Owner, 2026-11-01:** facts, dimensions and the rest are managed **inside each data source** (they only exist
+     in the context of one), not as separate Metrics menu pages: the data source's page lists its facts and
+     dimensions (then focus areas, metrics) and adds / edits them there.
+   - ✅ **Test connection reports what the login can read** (owner, 2026-11-01: "more useful than reporting that
+     nothing has been registered yet"): tables/views the connection's login may SELECT, per schema (system schemas
+     left out), on the data source's own connection; a login that can read nothing fails the test. Registered
+     tables are still checked one by one. Username field: no placeholder (a grey "prism_reader" looked typed in);
+     missing username / password shown under the field.
+   - **STAR schema setup: design agreed with the owner, 2026-11-01** (build next, in a new session):
+     - **Tables list** on the data source's page, once the connection works: every table the connection can read,
+       as a table with columns **Schema, Table, Type, Status** (plus the alias). **Type:** Fact, Dimension or
+       **Not Used** (owner: "needs to be added for sure": staging, lookup or audit tables are neither). **Status**
+       is worked out by Prism, never set by hand: **Configured** (green) or **Not Configured** (red); also red
+       **Missing** for a registered table the connection can no longer see (renamed / dropped).
+     - **Status rolls up, "like red/green on a submarine"** (owner): nothing is green while something under it has
+       a hole.
+       - A **dimension** is Configured only when it has its focus area and every one of its columns is mapped to a
+         focus level or marked Not Used (details deferred: see focus levels below).
+       - A **fact** is Configured only when it has at least one dimension, each association has its join columns,
+         and **every associated dimension is Configured** (green) itself.
+       - Not Used tables count as done; the data source is complete when every table has a type and every fact
+         and dimension is green.
+     - **Fact editor** (the next build step): edit a fact table and choose its dimensions with **two list boxes,
+       Available Dimensions and Selected Dimensions**, moved across with left / right arrow buttons, and the
+       selected ones **reordered with up / down arrow buttons** (owner). Keyboard (proposed): Up / Down move the
+       selection, Right / Left move the selected dimension across, Alt+Up / Alt+Down reorder (plain Up / Down
+       must still move through a long list), double-click moves across.
+       - **Join columns per association** (Facts_Dimensions_Assoc needs them: `fact_column = dimension_column`):
+         each selected dimension shows its join ("on sprint_pk = sprint_pk"), suggested by Prism from foreign keys,
+         else from matching column names (right for every demo join), editable.
+       - **Alias** per fact / dimension (what metric expressions use: smf, sd, td): suggested from the table name's
+         initials, editable, unique within a fact and its dimensions.
+       - **Order** of the selected dimensions: needs a new column (Facts_Dimensions_Assoc has none; a new SQL
+         script). Proposed meaning: the order of that fact's focus areas wherever they're listed (e.g. Analysis
+         sidebar); owner didn't object, confirm when building.
+       - Guards (409 with what uses it): a fact with metrics can't change type; a dimension a metric's focus area
+         depends on can't be removed from its fact.
+       - prism_database sources: run `prism.grant_star_tables_to_reader()` after saving.
+     - **Needs first:** schema reading (#6): the connection's tables with their columns, types and foreign keys
+       (catalog queries on the data source's own connection, like Test connection's count).
+     - **Focus areas and levels: deferred** (owner: "Let's deal with focus levels when we get there. We'll need to
+       look at an actual dimension table with associated focus area/levels and walk through the mapping to ensure
+       it makes sense against our data model. I don't think that's going to be a quick thing."). Points raised to
+       walk through then: a focus level uses a **key** column and a **label** column (e.g. `year_month` /
+       `year_month_label`), so a column maps to a level as its key or its label; join-key columns (e.g.
+       `sprint_pk`) could count as mapped automatically; a dimension's levels have a display order and **drill
+       paths** (the demo Time area has two: Year → Quarter → Month → Sprint, and Year → Year & Sprint).
+     - **Build order:** (1) schema reading; (2) tables list with Type (Fact / Dimension / Not Used), alias and
+       status; (3) fact editor (two lists, join columns, order, keyboard); then, after the walkthrough, (4) the
+       dimension editor (focus area, column → level mapping, Not Used columns, level order and drill paths);
+       (5) metrics with the live preview.
+   - ✅ **TEMPORARY development-only connection** (built 2026-11-01, owner: "a fourth purely-temporary option …
+     where the secret is entered and stored … while we build out the remaining functionality. We just remove the
+     option later"; then "a table of key value pairs associated [with] a datasource. That's more flexible"):
+     method **Direct (development only)** (`direct_dev`, SQL/024) with host, port, database and a username +
+     password kept in the new **`Data_Source_Properties`** table (name/value per data source; the password marked
+     secret: never returned, blank keeps it). Own pool per data source, the same fail-closed login check as the
+     metric login (read-only, not a superuser, no access to `prism`; never Prism's login), rebuilt when the settings
+     change; Test connection and charts both use it; only allow-listed settings reach the driver. On while
+     `prism.data-sources.allow-dev-connections=true` (application.properties). Checked: unit tests (7 new), a real
+     Spring context against Postgres (27 checks: a direct_dev source → localhost/playpen as `prism_reader`, the demo
+     source switched to direct_dev gave **identical results for all 65 metric × level charts (1,300 rows)**, Prism's
+     login and a superuser refused, wrong password named, password never returned, pool rebuilt on change, turned
+     off → refused), browser runs (14 new checks).
+     **To remove it** (when the secrets store exists): delete or convert the `direct_dev` sources; drop
+     `direct_dev` from the two Data_Sources CHECKs (a new script); delete secret rows from `Data_Source_Properties`
+     (the table stays for non-secret settings such as `sslmode`); remove `ClientDatabaseDataProvider`'s method,
+     `allow-dev-connections`, the `direct_dev` entries in `DataSourcesService` (METHODS, validate,
+     requireDevAllowed) and in the edit page (DevLogin, labels.ts). `ClientDatabaseConnections` keeps its pools and
+     checks for the firewall-allow-list method, with the login from the secrets store instead.
+   - **Client-database connections (next, to validate the external path):** a "Firewall allow-list" data source
+     pointing at the owner's local Postgres (localhost / playpen, as `prism_reader`) must be able to Test connection
+     and, once its facts and dimensions are registered, serve charts. Needs: (1) a secrets store behind an interface
+     (local: a git-ignored file / environment variable per secret name; a real store such as AWS Secrets Manager
+     later); (2) a provider for client databases: a pool per data source, the same login checks as SQL/022 (not
+     Prism's login, read-only, no access to Prism's schema), time limit, audit; TLS required except an explicit
+     localhost exception; Test connection and chart queries both use it. Firewall allow-list and private link are
+     both a direct connection from Prism's side; outbound agent stays later.
    - after saving facts or dimensions of a `prism_database` source, call `prism.grant_star_tables_to_reader()`
      (SQL/022) so the read-only metric login can read exactly the registered tables;
    - **Facts and dimensions:** pick tables from the data source (with #6 schema reading), set aliases, and the
@@ -190,7 +278,9 @@ the real JDBC driver (2026-10-21).
    - **Focus areas and levels:** an area per dimension; levels as dimension columns with a **label** and a **key**
      column (one label per key, checked), display order, and drill paths (several per area, as in the demo's two
      Time paths), with the same-area / no-loop rules;
-   - **Metrics:** as below;
+   - **Metrics:** as below; with a **live preview** in the metric editor (owner, 2026-11-01: wanted): the metric as
+     a chart on real data (read-only login) by a chosen focus level, refreshed as the definition changes, with
+     sanity warnings (e.g. a percentage over 100 %, all values empty, a column that looks like a stored ratio);
    - the metadata setup assistant (#11) produces proposals these screens import and validate.
    Metric editing:
    - pick a fact, a type and columns;

@@ -51,7 +51,7 @@ class MetricQueryConnectionTests {
     void timeoutsAreRecognisedBySqlState() {
         var cancelled = new UncategorizedSQLException("query", "SELECT 1",
                 new SQLException("canceling statement due to statement timeout", "57014"));
-        assertEquals(PrismDatabaseDataProvider.QUERY_CANCELED, PrismDatabaseDataProvider.sqlState(cancelled));
-        assertNull(PrismDatabaseDataProvider.sqlState(new DataAccessResourceFailureException("no SQLException")));
+        assertEquals(SqlMetricQueries.QUERY_CANCELED, SqlMetricQueries.sqlState(cancelled));
+        assertNull(SqlMetricQueries.sqlState(new DataAccessResourceFailureException("no SQLException")));
     }
 }

@@ -136,8 +136,10 @@ label.form-label {
   }
 }
 
-/* A chart area's group box: a tinted panel with a header strip, so the dark inputs inside stand out. */
-.dashboard-area {
+/* Group box: a tinted panel with a header strip, so the dark inputs inside stand out (dashboard chart areas, data
+   source connection settings, …). */
+.dashboard-area,
+.group-box {
   background-color: rgba(74, 44, 122, 0.35); /* --bs-primary-darker, translucent */
   border: 1px solid var(--bs-border-color);
   border-radius: 0.5rem;
@@ -146,7 +148,8 @@ label.form-label {
   overflow: hidden;
 }
 
-.dashboard-area__legend {
+.dashboard-area__legend,
+.group-box__legend {
   float: left; /* puts the legend inside the box instead of on its border */
   width: calc(100% + 2rem);
   margin: 0 -1rem 0.75rem;
@@ -158,7 +161,8 @@ label.form-label {
   color: var(--bs-text-light);
 }
 
-.dashboard-area__legend + * {
+.dashboard-area__legend + *,
+.group-box__legend + * {
   clear: both;
 }
 
@@ -180,6 +184,20 @@ label.form-label {
 .list-table {
   --bs-table-striped-bg: #2f2147;
   --bs-table-striped-color: var(--bs-table-color);
+}
+
+/* ---- Metrics → Data Sources ---------------------------------------------------------- */
+
+.data-source-edit {
+  max-width: 760px;
+}
+
+.data-source-edit__name {
+  max-width: 28rem;
+}
+
+.connection-test__tables code {
+  color: inherit;
 }
 
 /* ---- Toast ------------------------------------------------------------------ */

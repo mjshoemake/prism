@@ -270,7 +270,7 @@ marks an association table).
 
 | Entity (table) | Describes |
 |---|---|
-| **Data Source** (`Data_Sources`) | Where a STAR schema lives and how Prism connects (see below); read-only credentials kept in a secrets store, never in a table. Database connection columns and API connection columns are separate; exactly one of the two must be filled (no separate type column). |
+| **Data Source** (`Data_Sources`) | Where a STAR schema lives and how Prism connects (see below); read-only credentials kept in a secrets store, never in a table. (Exception during development only: the TEMPORARY `direct_dev` method keeps a login in `Data_Source_Properties`, SQL/024, until the secrets store exists; see ROADMAP #5.) Database connection columns and API connection columns are separate; exactly one of the two must be filled (no separate type column). |
 | **Fact** (`Facts`) | A fact table in a data source: table name and alias. |
 | **Dimension** (`Dimensions`) | A dimension table in a data source: table name and alias. Shared by any number of facts. |
 | **Fact–dimension link** (`Facts_Dimensions_Assoc`) | Association table: which dimensions a fact joins to, and on which columns. Prism builds the JOINs from these. (A fact joining the same dimension twice, e.g. two date roles, would need a role name; not needed yet.) |

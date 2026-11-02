@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { Dashboard } from '../../api/types';
 import { useAuth } from '../../auth/useAuth';
@@ -15,6 +15,9 @@ import { loadLastDashboard, saveLastDashboard } from './lastDashboard';
 /** Name of the dashboard created for a user who has none, so the page always shows a chart. */
 export const FIRST_DASHBOARD_NAME = 'My dashboard';
 
+/** The first-dashboard request in flight, shared by every mount of the page (a ref would be per mount). */
+let pendingFirstDashboard: { userId: string; done: Promise<unknown> } | null = null;
+
 /**
  * Analysis: one of the user's saved dashboards (1, 2 or 4 charts). Each chart area shows its saved metric with its
  * saved y-axis scale; the focus area, level and filters are shared, so a bar click on any chart filters and drills
@@ -28,7 +31,6 @@ export function AnalysisPage() {
   const metricList = useMetricList();
   const board = useDashboards(userId);
   const [createError, setCreateError] = useState<string | null>(null);
-  const creating = useRef(false);
 
   const requestedPk = Number(searchParams.get('dashboard')) || null;
   const selected = pickDashboard(board.dashboards, requestedPk, userId ? loadLastDashboard(userId) : null);
@@ -47,9 +49,19 @@ export function AnalysisPage() {
   const needsFirstDashboard =
     !board.loading && !board.error && board.dashboards.length === 0 && !metricList.loading && firstMetric !== null;
   useEffect(() => {
-    if (!needsFirstDashboard || !firstMetric || creating.current || createError) return;
-    creating.current = true; // StrictMode runs effects twice; create only once.
-    board
+    if (!needsFirstDashboard || !firstMetric || createError || !userId) return;
+    // Created once per user even if the page mounts twice in a row (StrictMode, the /metrics redirect): a second
+    // mount waits for the first one's request and then reloads the list.
+    if (pendingFirstDashboard?.userId === userId) {
+      let cancelled = false;
+      void pendingFirstDashboard.done.then(() => {
+        if (!cancelled) board.reload();
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    const done = board
       .create({
         name: FIRST_DASHBOARD_NAME,
         layout: 1,
@@ -60,11 +72,12 @@ export function AnalysisPage() {
         // Another tab created it first: show that one.
         if (isConflict(e)) board.reload();
         else setCreateError(`Couldn't create your first dashboard: ${serverMessage(e)}`);
-      })
-      .finally(() => {
-        creating.current = false;
       });
-  }, [board, createError, firstMetric, needsFirstDashboard, setSearchParams]);
+    pendingFirstDashboard = { userId, done };
+    void done.finally(() => {
+      if (pendingFirstDashboard?.done === done) pendingFirstDashboard = null;
+    });
+  }, [board, createError, firstMetric, needsFirstDashboard, setSearchParams, userId]);
 
   const positions = useMemo(() => (selected ? visiblePositions(selected.layout) : []), [selected]);
   const areas = useMemo(() => positions.map((p) => (selected ? chartAt(selected, p) : null)), [positions, selected]);

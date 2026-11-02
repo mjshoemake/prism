@@ -219,6 +219,7 @@ frontend/
     ├── features/               ── one folder per screen/domain
     │   ├── analysis/           AnalysisPage (a saved dashboard's charts), lastDashboard, components/AnalysisSidebar
     │   ├── dashboards/         DashboardListPage, DashboardEditPage, useDashboards, layouts, components/DashboardChartCard
+    │   ├── dataSources/        DataSourceListPage, DataSourceEditPage, useDataSources, labels, components/ConnectionTestPanel
     │   ├── metrics/            useMetricsExplorer, useMetricList, metricFormat (scales), filters, components/
     │   ├── users/              UsersPage, useUsers, userList (filter/sort), temporaryPassword, format,
     │   │                       components/ (UsersTable, UserRow, AddUserModal, EditUserModal, TemporaryPasswordNotice)
@@ -498,7 +499,10 @@ from the feature hook. Endpoints that answer failures with a JSON body (like the
 | Chart colours | `src/theme/palette.ts` — Chart.js draws on a canvas and can't read CSS variables; keep it in sync with the CSS |
 | Page layout (sidebar width, chart height, toast position) | `src/styles/layout.css` |
 | A single component's look | Prefer Bootstrap utility classes (`mb-3`, `d-flex`, `text-muted`) in the JSX |
+| Group boxes (a tinted panel with a header strip inside a form) | `<fieldset className="group-box">` + `<legend className="group-box__legend">` (`layout.css`; the dashboard edit page uses the same style as `dashboard-area`) |
 | Page title bars and list rows | `page-card` on every page's card (purple title bar; dialogs get the same bar automatically) and, on list pages, `table table-dark table-striped table-hover … list-table` on the table (alternating muted-purple rows); both in `layout.css` |
+
+**API errors:** `serverMessage(error)` (in `api/client.ts`) gives the server's `{success:false, message}` text; `isConflict(error)` is true for a 409 (e.g. a name already in use: show it under the field).
 
 **Buttons:** use only the variants the theme styles — `btn-primary` (main action: Save, Add, confirm),
 `btn-secondary` / `btn-outline-secondary` (Cancel and secondary actions) and `btn-outline-primary`.
